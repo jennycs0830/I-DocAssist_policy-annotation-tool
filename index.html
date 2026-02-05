@@ -172,7 +172,7 @@
       );
     }
 
-    // Stage 1
+    // Stage 1: Section-level Requirement Extraction
     function Stage1SectionExtraction({ sections, setSections }) {
       const [requirementText, setRequirementText] = useState('');
       const [sectionType, setSectionType] = useState('general');
@@ -190,46 +190,93 @@
         setSectionType('general');
       };
 
+      const editSection = (section) => {
+        setRequirementText(section.text);
+        setSectionType(section.type);
+        setEditingId(section.id);
+      };
+
+      const deleteSection = (id) => {
+        setSections(sections.filter(s => s.id !== id));
+        if (editingId === id) {
+          setEditingId(null);
+          setRequirementText('');
+        }
+      };
+
       const typeColors = { general: 'bg-blue-100 text-blue-800 border-blue-200', supplementary: 'bg-purple-100 text-purple-800 border-purple-200', exception: 'bg-orange-100 text-orange-800 border-orange-200' };
 
       return (
         <div>
+          {/* Detailed Instructions from v4 */}
           <InstructionsPanel title="Stage 1 Instructions: Section-level Requirement Extraction">
             <div className="space-y-3">
               <p><strong>Goal:</strong> Extract requirement sections from the policy document and classify them by type.</p>
+
+              <div>
+                <p className="font-medium mb-1">Steps:</p>
+                <ol className="list-decimal list-inside space-y-1 ml-2">
+                  <li>Open the policy document in a separate browser tab</li>
+                  <li>Find a requirement section (e.g., under "Medical Necessity" or "Additional Notes")</li>
+                  <li>Copy the entire section text and paste it into the text area below</li>
+                  <li>Select the appropriate section type</li>
+                  <li>Click "Add Section" to save</li>
+                  <li>Repeat for all requirement sections in the document</li>
+                </ol>
+              </div>
+
               <div>
                 <p className="font-medium mb-1">Section Types:</p>
                 <ul className="space-y-1 ml-2">
-                  <li><span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium">General</span> — Primary medical necessity criteria</li>
-                  <li><span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-800 rounded text-xs font-medium">Supplementary</span> — Additional requirements, definitions, documentation</li>
-                  <li><span className="inline-block px-2 py-0.5 bg-orange-100 text-orange-800 rounded text-xs font-medium">Exception</span> — Not covered, exclusions, waivers</li>
+                  <li><span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium">General</span> — Primary medical necessity criteria for a procedure/indication (e.g., "all of the following criteria must be met")</li>
+                  <li><span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-800 rounded text-xs font-medium">Supplementary</span> — Additional requirements, definitions, documentation requirements, or global constraints that co-apply</li>
+                  <li><span className="inline-block px-2 py-0.5 bg-orange-100 text-orange-800 rounded text-xs font-medium">Exception</span> — Not covered, not medically necessary, investigational, exclusions, waivers, or override conditions</li>
                 </ul>
               </div>
+
+              <p className="text-blue-600 italic">💡 Tip: Keep sections as cohesive units. If there's a clear procedure/anatomy heading with its criteria checklist, keep them together as one section.</p>
             </div>
           </InstructionsPanel>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left: Input Form */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">{editingId ? 'Edit Section' : 'Add New Section'}</h2>
               <div className="space-y-4">
-                <textarea value={requirementText} onChange={(e) => setRequirementText(e.target.value)} placeholder="Paste or type the section requirement text here..." rows={10} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none" />
-                <div className="flex gap-3">
-                  {['general', 'supplementary', 'exception'].map(type => (
-                    <button key={type} onClick={() => setSectionType(type)} className={`px-4 py-2 rounded-lg border-2 transition-all capitalize ${sectionType === type ? typeColors[type] + ' border-current' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}`}>{type}</button>
-                  ))}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Section Requirements</label>
+                  <textarea value={requirementText} onChange={(e) => setRequirementText(e.target.value)} placeholder="Paste or type the section requirement text here..." rows={12} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" />
                 </div>
-                <button onClick={addSection} disabled={!requirementText.trim()} className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-medium ${requirementText.trim() ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
-                  <Plus size={18} /> {editingId ? 'Update Section' : 'Add Section'}
-                </button>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Section Type</label>
+                  <div className="flex gap-3">
+                    {['general', 'supplementary', 'exception'].map(type => (
+                      <button key={type} onClick={() => setSectionType(type)} className={`px-4 py-2 rounded-lg border-2 transition-all capitalize ${sectionType === type ? typeColors[type] + ' border-current' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}`}>{type}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={addSection} disabled={!requirementText.trim()} className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors ${requirementText.trim() ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
+                    <Plus size={18} /> {editingId ? 'Update Section' : 'Add Section'}
+                  </button>
+                  {editingId && (
+                    <button onClick={() => { setEditingId(null); setRequirementText(''); setSectionType('general'); }} className="px-6 py-3 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Cancel</button>
+                  )}
+                </div>
               </div>
             </div>
 
+            {/* Right: Sections List */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Extracted Sections ({sections.length})</h2>
               {sections.length === 0 ? (
-                <div className="text-center py-12 text-gray-500"><Layers size={48} className="mx-auto mb-4 opacity-50" /><p>No sections extracted yet.</p></div>
+                <div className="text-center py-12 text-gray-500">
+                  <Layers size={48} className="mx-auto mb-4 opacity-50" />
+                  <p>No sections extracted yet.</p>
+                  <p className="text-sm">Paste requirement text and add sections to begin.</p>
+                </div>
               ) : (
-                <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                <div className="space-y-3 max-h-[600px] overflow-y-auto">
                   {sections.map((section) => (
                     <div key={section.id} className={`p-4 rounded-lg border-2 ${typeColors[section.type]}`}>
                       <div className="flex items-start justify-between gap-3">
@@ -241,8 +288,8 @@
                           <p className="text-sm whitespace-pre-wrap line-clamp-4">{section.text}</p>
                         </div>
                         <div className="flex gap-1">
-                          <button onClick={() => { setRequirementText(section.text); setSectionType(section.type); setEditingId(section.id); }} className="p-2 hover:bg-white/50 rounded-lg"><FileText size={16} /></button>
-                          <button onClick={() => setSections(sections.filter(s => s.id !== section.id))} className="p-2 hover:bg-white/50 rounded-lg text-red-600"><Trash2 size={16} /></button>
+                          <button onClick={() => editSection(section)} className="p-2 hover:bg-white/50 rounded-lg transition-colors" title="Edit"><FileText size={16} /></button>
+                          <button onClick={() => deleteSection(section.id)} className="p-2 hover:bg-white/50 rounded-lg transition-colors text-red-600" title="Delete"><Trash2 size={16} /></button>
                         </div>
                       </div>
                     </div>
@@ -255,7 +302,7 @@
       );
     }
 
-    // Stage 2
+    // Stage 2: Atomic Breakdown with Tree Builder
     function Stage2AtomicBreakdown({ sections, sectionTrees, setSectionTrees }) {
       const [selectedSectionId, setSelectedSectionId] = useState(sections.length > 0 ? sections[0].id : null);
       const currentSection = sections.find(s => s.id === selectedSectionId);
@@ -265,23 +312,49 @@
 
       return (
         <div>
+          {/* Detailed Instructions from v4 */}
           <InstructionsPanel title="Stage 2 Instructions: Break Section Requirements into Atomic Items">
             <div className="space-y-3">
-              <p><strong>Goal:</strong> Convert each section into a logic tree with atomic requirements.</p>
+              <p><strong>Goal:</strong> Convert each section's requirements into a structured logic tree with atomic (individual, checkable) items.</p>
+
+              <div>
+                <p className="font-medium mb-1">Steps:</p>
+                <ol className="list-decimal list-inside space-y-1 ml-2">
+                  <li>Select a section from the left panel</li>
+                  <li>Read the section content in the middle panel</li>
+                  <li>Identify atomic requirements and copy each one</li>
+                  <li>Paste into the tree builder and click "+" to add</li>
+                  <li>Use operators to structure the logic (see below)</li>
+                  <li>For each leaf item, set the <code className="bg-gray-200 px-1 rounded">req_kind</code> and <code className="bg-gray-200 px-1 rounded">evidence_source</code></li>
+                  <li>Repeat for all sections</li>
+                </ol>
+              </div>
+
               <div>
                 <p className="font-medium mb-1">Logic Operators:</p>
                 <ul className="space-y-1 ml-2">
-                  <li><span className="inline-block px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs font-mono font-bold">ALL</span> — All must be satisfied (AND)</li>
-                  <li><span className="inline-block px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded text-xs font-mono font-bold">ANY</span> — At least one (OR)</li>
-                  <li><span className="inline-block px-2 py-0.5 bg-red-100 text-red-800 rounded text-xs font-mono font-bold">NOT</span> — Must NOT be satisfied</li>
-                  <li><span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-mono font-bold">IF</span> — Conditional</li>
-                  <li><span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-800 rounded text-xs font-mono font-bold">UNLESS</span> — Required unless...</li>
+                  <li><span className="inline-block px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs font-mono font-bold">ALL</span> — All children must be satisfied (AND logic) — use for "all of the following"</li>
+                  <li><span className="inline-block px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded text-xs font-mono font-bold">ANY</span> — At least one child must be satisfied (OR logic) — use for "any of the following" or "either/or"</li>
+                  <li><span className="inline-block px-2 py-0.5 bg-red-100 text-red-800 rounded text-xs font-mono font-bold">NOT</span> — The child must NOT be satisfied — use for "must not" or exclusions</li>
+                  <li><span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-mono font-bold">IF</span> — Conditional: if first child is true, check remaining children</li>
+                  <li><span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-800 rounded text-xs font-mono font-bold">UNLESS</span> — Required unless the child condition is met — use for "required unless..."</li>
                 </ul>
               </div>
+
+              <div>
+                <p className="font-medium mb-1">Leaf Node Fields:</p>
+                <ul className="space-y-1 ml-2">
+                  <li><code className="bg-gray-200 px-1 rounded">req_kind</code>: What type of requirement (imaging, diagnosis, prior_treatment, documentation, lab, other)</li>
+                  <li><code className="bg-gray-200 px-1 rounded">evidence_source</code>: Where to verify this requirement (clinical_note, imaging_report, therapy_records, lab_result, prior_auth_form)</li>
+                </ul>
+              </div>
+
+              <p className="text-blue-600 italic">💡 Tip: Start by adding all atomic items, then wrap them with appropriate operators. Click the "+" on any operator node to add children directly.</p>
             </div>
           </InstructionsPanel>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left: Section Selector */}
             <div className="lg:col-span-3 bg-white rounded-xl border border-gray-200 p-4">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Sections</h2>
               <div className="space-y-2 max-h-[600px] overflow-y-auto">
@@ -289,7 +362,7 @@
                   <button key={section.id} onClick={() => setSelectedSectionId(section.id)} className={`w-full text-left p-3 rounded-lg border-2 transition-all ${selectedSectionId === section.id ? 'ring-2 ring-blue-500 ' + typeColors[section.type] : 'border-gray-200 hover:border-gray-300'}`}>
                     <div className="flex items-center justify-between">
                       <span className="font-mono text-sm font-bold">{section.id}</span>
-                      {sectionTrees[section.id] && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">✓</span>}
+                      {sectionTrees[section.id] && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">✓ Tree</span>}
                     </div>
                     <span className={`text-xs capitalize ${typeColors[section.type].split(' ')[1]}`}>{section.type}</span>
                   </button>
@@ -297,16 +370,20 @@
               </div>
             </div>
 
+            {/* Middle: Section Content Reference */}
             <div className="lg:col-span-4 bg-white rounded-xl border border-gray-200 p-4">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Section Content</h2>
               {currentSection ? (
                 <div className={`p-4 rounded-lg border ${typeColors[currentSection.type]} max-h-[600px] overflow-y-auto`}>
-                  <span className="font-mono text-xs font-bold bg-white/50 px-2 py-0.5 rounded">{currentSection.id}</span>
-                  <p className="text-sm whitespace-pre-wrap select-all mt-2">{currentSection.text}</p>
+                  <div className="mb-2">
+                    <span className="font-mono text-xs font-bold bg-white/50 px-2 py-0.5 rounded">{currentSection.id}</span>
+                  </div>
+                  <p className="text-sm whitespace-pre-wrap select-all">{currentSection.text}</p>
                 </div>
               ) : <p className="text-gray-500 text-center py-8">Select a section</p>}
             </div>
 
+            {/* Right: Tree Builder */}
             <div className="lg:col-span-5 bg-white rounded-xl border border-gray-200 p-4">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Logic Tree Builder</h2>
               {selectedSectionId && <TreeBuilder tree={currentTree} setTree={updateTree} />}
@@ -316,11 +393,13 @@
       );
     }
 
-    // Tree Builder
+    // Tree Builder Component
     function TreeBuilder({ tree, setTree }) {
       const [newItemText, setNewItemText] = useState('');
       const createNode = (type, children = [], text = '') => ({ id: `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, type, text, children, req_kind: '', evidence_source: '' });
       const operators = ['ALL', 'ANY', 'NOT', 'IF', 'UNLESS'];
+
+      const initializeTree = () => setTree(createNode('ALL', []));
 
       const addLeafNode = () => {
         if (!newItemText.trim()) return;
@@ -363,19 +442,25 @@
 
       return (
         <div className="space-y-4">
+          {/* Add new item */}
           <div className="flex gap-2">
-            <input type="text" value={newItemText} onChange={(e) => setNewItemText(e.target.value)} placeholder="Paste atomic requirement..." className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm" onKeyPress={(e) => e.key === 'Enter' && addLeafNode()} />
-            <button onClick={addLeafNode} disabled={!newItemText.trim()} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300"><Plus size={18} /></button>
+            <input type="text" value={newItemText} onChange={(e) => setNewItemText(e.target.value)} placeholder="Paste atomic requirement text..." className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" onKeyPress={(e) => e.key === 'Enter' && addLeafNode()} />
+            <button onClick={addLeafNode} disabled={!newItemText.trim()} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"><Plus size={18} /></button>
           </div>
+
+          {/* Operator buttons */}
           <div className="flex flex-wrap gap-2">
-            <span className="text-sm text-gray-600 py-1">Wrap with:</span>
+            <span className="text-sm text-gray-600 py-1">Wrap tree with:</span>
             {operators.map(op => <button key={op} onClick={() => wrapWithOperator(op)} className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg font-mono">{op}</button>)}
           </div>
+
+          {/* Tree visualization */}
           <div className="border border-gray-200 rounded-lg p-4 min-h-[300px] max-h-[400px] overflow-y-auto bg-gray-50">
             {!tree ? (
               <div className="text-center py-8 text-gray-500">
-                <p>No tree yet.</p>
-                <button onClick={() => setTree(createNode('ALL', []))} className="mt-4 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200">Initialize with ALL</button>
+                <p>No tree structure yet.</p>
+                <p className="text-sm">Add atomic items or initialize with an operator.</p>
+                <button onClick={initializeTree} className="mt-4 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200">Initialize with ALL</button>
               </div>
             ) : <TreeNode node={tree} depth={0} updateNode={updateNode} deleteNode={deleteNode} addChildToNode={addChildToNode} createNode={createNode} />}
           </div>
@@ -383,7 +468,7 @@
       );
     }
 
-    // Tree Node
+    // Tree Node Component (recursive)
     function TreeNode({ node, depth, updateNode, deleteNode, addChildToNode, createNode }) {
       const [isExpanded, setIsExpanded] = useState(true);
       const [isEditing, setIsEditing] = useState(false);
@@ -410,45 +495,55 @@
             <div className="flex-1 min-w-0">
               {isOperator ? (
                 <div className="flex items-center gap-2">
-                  <select value={node.type} onChange={(e) => updateNode(node.id, { type: e.target.value })} className="font-mono font-bold text-sm bg-transparent border-none cursor-pointer">{operators.map(op => <option key={op} value={op}>{op}</option>)}</select>
-                  <span className="text-xs text-gray-500">({node.children?.length || 0})</span>
+                  <select value={node.type} onChange={(e) => updateNode(node.id, { type: e.target.value })} className="font-mono font-bold text-sm bg-transparent border-none focus:ring-0 cursor-pointer">{operators.map(op => <option key={op} value={op}>{op}</option>)}</select>
+                  <span className="text-xs text-gray-500">({node.children?.length || 0} items)</span>
                 </div>
               ) : isEditing ? (
                 <div className="flex gap-2">
-                  <input type="text" value={editText} onChange={(e) => setEditText(e.target.value)} className="flex-1 px-2 py-1 text-sm border rounded" onKeyPress={(e) => e.key === 'Enter' && saveEdit()} autoFocus />
-                  <button onClick={saveEdit} className="text-xs text-blue-600">Save</button>
+                  <input type="text" value={editText} onChange={(e) => setEditText(e.target.value)} className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded" onKeyPress={(e) => e.key === 'Enter' && saveEdit()} autoFocus />
+                  <button onClick={saveEdit} className="text-xs text-blue-600 hover:underline">Save</button>
                 </div>
               ) : <p className="text-sm cursor-pointer hover:bg-black/5 rounded p-1 -m-1" onClick={() => setIsEditing(true)}>{node.text || <em className="text-gray-400">Click to edit</em>}</p>}
+
+              {/* Leaf node metadata */}
               {!isOperator && (
                 <div className="flex gap-2 mt-2">
-                  <select value={node.req_kind || ''} onChange={(e) => updateNode(node.id, { req_kind: e.target.value })} className="text-xs px-2 py-1 border rounded bg-white">
+                  <select value={node.req_kind || ''} onChange={(e) => updateNode(node.id, { req_kind: e.target.value })} className="text-xs px-2 py-1 border border-gray-200 rounded bg-white">
                     <option value="">req_kind...</option><option value="imaging">imaging</option><option value="diagnosis">diagnosis</option><option value="prior_treatment">prior_treatment</option><option value="documentation">documentation</option><option value="lab">lab</option><option value="other">other</option>
                   </select>
-                  <select value={node.evidence_source || ''} onChange={(e) => updateNode(node.id, { evidence_source: e.target.value })} className="text-xs px-2 py-1 border rounded bg-white">
+                  <select value={node.evidence_source || ''} onChange={(e) => updateNode(node.id, { evidence_source: e.target.value })} className="text-xs px-2 py-1 border border-gray-200 rounded bg-white">
                     <option value="">evidence_source...</option><option value="clinical_note">clinical_note</option><option value="imaging_report">imaging_report</option><option value="therapy_records">therapy_records</option><option value="lab_result">lab_result</option><option value="prior_auth_form">prior_auth_form</option>
                   </select>
                 </div>
               )}
             </div>
+
             <div className="flex gap-1">
-              {isOperator && <button onClick={() => setShowAddChild(!showAddChild)} className="p-1 hover:bg-black/10 rounded text-gray-600"><Plus size={14} /></button>}
-              <button onClick={() => deleteNode(node.id)} className="p-1 hover:bg-black/10 rounded text-red-600"><Trash2 size={14} /></button>
+              {isOperator && <button onClick={() => setShowAddChild(!showAddChild)} className="p-1 hover:bg-black/10 rounded text-gray-600" title="Add child"><Plus size={14} /></button>}
+              <button onClick={() => deleteNode(node.id)} className="p-1 hover:bg-black/10 rounded text-red-600" title="Delete"><Trash2 size={14} /></button>
             </div>
           </div>
+
+          {/* Add child form */}
           {showAddChild && (
             <div className="ml-6 mb-2 p-2 bg-gray-100 rounded-lg flex gap-2 items-center">
-              <select value={newChildOp} onChange={(e) => setNewChildOp(e.target.value)} className="text-xs px-2 py-1 border rounded"><option value="leaf">Leaf</option>{operators.map(op => <option key={op} value={op}>{op}</option>)}</select>
-              {newChildOp === 'leaf' && <input type="text" value={newChildText} onChange={(e) => setNewChildText(e.target.value)} placeholder="Text..." className="flex-1 px-2 py-1 text-xs border rounded" onKeyPress={(e) => e.key === 'Enter' && addChild()} />}
-              <button onClick={addChild} className="px-2 py-1 text-xs bg-blue-600 text-white rounded">Add</button>
-              <button onClick={() => setShowAddChild(false)} className="px-2 py-1 text-xs text-gray-600">Cancel</button>
+              <select value={newChildOp} onChange={(e) => setNewChildOp(e.target.value)} className="text-xs px-2 py-1 border border-gray-300 rounded">
+                <option value="leaf">Leaf (text)</option>
+                {operators.map(op => <option key={op} value={op}>{op}</option>)}
+              </select>
+              {newChildOp === 'leaf' && <input type="text" value={newChildText} onChange={(e) => setNewChildText(e.target.value)} placeholder="Requirement text..." className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded" onKeyPress={(e) => e.key === 'Enter' && addChild()} />}
+              <button onClick={addChild} className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">Add</button>
+              <button onClick={() => setShowAddChild(false)} className="px-2 py-1 text-xs text-gray-600 hover:underline">Cancel</button>
             </div>
           )}
+
+          {/* Children */}
           {isExpanded && node.children?.map(child => <TreeNode key={child.id} node={child} depth={depth + 1} updateNode={updateNode} deleteNode={deleteNode} addChildToNode={addChildToNode} createNode={createNode} />)}
         </div>
       );
     }
 
-    // Stage 3 - CPT Mapping with Multiple Code Table Entries
+    // Stage 3: CPT Code Mapping with Multiple Code Table Entries (from v5)
     function Stage3CPTMapping({ sections, sectionTrees, cptMappings, setCptMappings }) {
       const [currentCPT, setCurrentCPT] = useState('');
       const [currentMappings, setCurrentMappings] = useState({ general: [], supplementary: [], exception: [] });
@@ -549,55 +644,93 @@
         })));
       };
 
+      const deleteMapping = (cptCode) => {
+        setCptMappings(cptMappings.filter(m => m.cpt_code !== cptCode));
+      };
+
       const getSectionById = (id) => sections.find(s => s.id === id);
 
       return (
         <div>
+          {/* Detailed Instructions - combining v4 style with v5 code table entries explanation */}
           <InstructionsPanel title="Stage 3 Instructions: CPT Code Mapping">
             <div className="space-y-3">
-              <p><strong>Goal:</strong> Map each CPT/HCPCS code to its requirement sections and capture code table information.</p>
+              <p><strong>Goal:</strong> Map each CPT/HCPCS code from the policy's code table to its relevant requirement sections, and capture any additional code-specific requirements from the table.</p>
+
               <div>
-                <p className="font-medium mb-1">Code Table Entries:</p>
-                <p className="ml-2">A single CPT code may appear under <strong>multiple headers</strong> in the code table, each with different conditions. Add an entry for each relevant header.</p>
-                <ul className="space-y-1 ml-2 mt-2">
-                  <li><strong>Table Heading:</strong> The section header (e.g., "Stereotactic Computer-assisted surgical navigation")</li>
-                  <li><strong>Coverage Status:</strong> covered if criteria met, not covered, etc.</li>
-                  <li><strong>LOB Applicability:</strong> Medicare, Commercial, Medicaid</li>
-                  <li><strong>Dependent Codes:</strong> Codes that must be met first (e.g., "22532-22830, 63001-63655")</li>
-                  <li><strong>Condition Notes:</strong> Any specific conditions from the table</li>
+                <p className="font-medium mb-1">Steps:</p>
+                <ol className="list-decimal list-inside space-y-1 ml-2">
+                  <li>Find the CPT/HCPCS codes table in the policy document</li>
+                  <li>Enter the CPT code in the input box</li>
+                  <li>Add <strong>Code Table Entries</strong> for each table header where this code appears (click "Add Entry")</li>
+                  <li>Drag sections from the middle panel to the appropriate drop zones</li>
+                  <li>Click "Save CPT Mapping"</li>
+                  <li>Repeat for all CPT codes in the document</li>
+                </ol>
+              </div>
+
+              <div>
+                <p className="font-medium mb-1">Code Table Entries (Multiple per CPT Code):</p>
+                <p className="ml-2 mb-2 text-sm">A single CPT code may appear under <strong>multiple headers</strong> in the code table, each with different coverage conditions. Add a separate entry for each relevant table header.</p>
+                <ul className="space-y-1 ml-2">
+                  <li><strong>Table Heading:</strong> The section header in the code table (e.g., "Stereotactic Computer-assisted surgical navigation", "Cervical/Thoracic - covered if criteria are met")</li>
+                  <li><strong>Coverage Status:</strong> Whether the code is covered if criteria met, not covered, experimental, etc. under this header</li>
+                  <li><strong>LOB Applicability:</strong> Which lines of business this applies to (Medicare, Commercial, Medicaid) — often indicated in the table header</li>
+                  <li><strong>Dependent Codes:</strong> If approval depends on other codes being met first (e.g., "approved if 22532-22830 are met")</li>
+                  <li><strong>Condition Notes:</strong> Any additional conditions or context from this table header</li>
                 </ul>
               </div>
+
+              <div>
+                <p className="font-medium mb-1">Section Mapping Rules:</p>
+                <ul className="space-y-1 ml-2">
+                  <li><span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium">General</span> — Exactly <strong>1</strong> primary medical necessity section</li>
+                  <li><span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-800 rounded text-xs font-medium">Supplementary</span> — <strong>0 or more</strong> additional requirements</li>
+                  <li><span className="inline-block px-2 py-0.5 bg-orange-100 text-orange-800 rounded text-xs font-medium">Exception</span> — <strong>0 or more</strong> exclusions/exceptions</li>
+                </ul>
+              </div>
+
+              <p className="text-blue-600 italic">💡 Tip: Pay attention to code table headers! The same code can have different coverage status and LOB under different headers (e.g., "Not covered for Medicare" vs "Covered if criteria are met for Commercial").</p>
             </div>
           </InstructionsPanel>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Saved Mappings */}
+            {/* Left: Saved Mappings */}
             <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-4">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Saved</h2>
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Saved Mappings</h2>
               <div className="space-y-2 max-h-[700px] overflow-y-auto">
-                {cptMappings.length === 0 ? <p className="text-sm text-gray-500 text-center py-4">No mappings</p> : cptMappings.map(m => (
-                  <div key={m.cpt_code} className="p-2 bg-gray-50 rounded-lg border group">
+                {cptMappings.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-4">No mappings yet</p>
+                ) : cptMappings.map(mapping => (
+                  <div key={mapping.cpt_code} className="p-2 bg-gray-50 rounded-lg border border-gray-200 group">
                     <div className="flex items-center justify-between">
-                      <button onClick={() => loadMapping(m)} className="font-mono text-sm font-medium text-blue-600 hover:underline">{m.cpt_code}</button>
-                      <button onClick={() => setCptMappings(cptMappings.filter(x => x.cpt_code !== m.cpt_code))} className="opacity-0 group-hover:opacity-100 text-red-500"><Trash2 size={14} /></button>
+                      <button onClick={() => loadMapping(mapping)} className="font-mono text-sm font-medium text-blue-600 hover:underline">{mapping.cpt_code}</button>
+                      <button onClick={() => deleteMapping(mapping.cpt_code)} className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"><Trash2 size={14} /></button>
                     </div>
-                    <div className="text-xs text-gray-500">{m.code_table_entries?.length || 0} entries</div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {mapping.general.length}g {mapping.supplementary.length}s {mapping.exception.length}e
+                      {mapping.code_table_entries?.length > 0 && ` • ${mapping.code_table_entries.length} entries`}
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Available Sections */}
+            {/* Middle: Available Sections */}
             <div className="lg:col-span-3 bg-white rounded-xl border border-gray-200 p-4">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Sections</h2>
-              <div className="space-y-2 max-h-[700px] overflow-y-auto">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Available Sections</h2>
+              <p className="text-sm text-gray-600 mb-4">Drag sections to map them to the current CPT code</p>
+              <div className="space-y-2 max-h-[650px] overflow-y-auto">
                 {sections.map((section) => (
-                  <div key={section.id} draggable onDragStart={(e) => handleDragStart(e, section)} className={`p-2 rounded-lg border-2 cursor-grab active:cursor-grabbing ${typeColors[section.type]} hover:shadow-md`}>
+                  <div key={section.id} draggable onDragStart={(e) => handleDragStart(e, section)} className={`p-3 rounded-lg border-2 cursor-grab active:cursor-grabbing ${typeColors[section.type]} hover:shadow-md transition-shadow`}>
                     <div className="flex items-center gap-2">
-                      <GripVertical size={14} className="text-gray-400" />
+                      <GripVertical size={16} className="text-gray-400" />
                       <div className="flex-1 min-w-0">
-                        <span className="font-mono text-xs font-bold">{section.id}</span>
-                        <p className="text-xs line-clamp-2">{section.text}</p>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-mono text-xs font-bold bg-white/50 px-2 py-0.5 rounded">{section.id}</span>
+                          <span className="text-xs font-semibold uppercase">{section.type}</span>
+                        </div>
+                        <p className="text-sm line-clamp-2">{section.text}</p>
                       </div>
                     </div>
                   </div>
@@ -605,27 +738,27 @@
               </div>
             </div>
 
-            {/* CPT Mapping Area */}
+            {/* Right: CPT Mapping Area */}
             <div className="lg:col-span-7 bg-white rounded-xl border border-gray-200 p-4 max-h-[800px] overflow-y-auto">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">CPT Code Mapping</h2>
 
               {/* CPT Input */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">CPT/HCPCS Code</label>
-                <input type="text" value={currentCPT} onChange={(e) => setCurrentCPT(e.target.value.toUpperCase())} placeholder="e.g., 22532" className="w-full px-4 py-2 border rounded-lg font-mono" />
+                <label className="block text-sm font-medium text-gray-700 mb-2">CPT/HCPCS Code</label>
+                <input type="text" value={currentCPT} onChange={(e) => setCurrentCPT(e.target.value.toUpperCase())} placeholder="Enter CPT code (e.g., 27447, 61782)" className="w-full px-4 py-2 border border-gray-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-500" />
               </div>
 
-              {/* Code Table Entries */}
+              {/* Code Table Entries Section (from v5) */}
               <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold text-amber-900">📋 Code Table Entries ({codeTableEntries.length})</h3>
-                  <button onClick={addCodeTableEntry} className="flex items-center gap-1 px-3 py-1 bg-amber-200 text-amber-900 rounded-lg text-sm hover:bg-amber-300">
+                  <button onClick={addCodeTableEntry} className="flex items-center gap-1 px-3 py-1 bg-amber-200 text-amber-900 rounded-lg text-sm hover:bg-amber-300 transition-colors">
                     <Plus size={14} /> Add Entry
                   </button>
                 </div>
 
                 {codeTableEntries.length === 0 ? (
-                  <p className="text-sm text-amber-700 text-center py-4">No code table entries. Click "Add Entry" to capture table header information.</p>
+                  <p className="text-sm text-amber-700 text-center py-4">No code table entries yet. Click "Add Entry" to capture information from each table header where this code appears.</p>
                 ) : (
                   <div className="space-y-3">
                     {codeTableEntries.map((entry, idx) => (
@@ -638,16 +771,16 @@
                         <div className="space-y-2">
                           <div>
                             <label className="block text-xs font-medium text-gray-600 mb-1">Table Heading</label>
-                            <input type="text" value={entry.table_heading} onChange={(e) => updateCodeTableEntry(entry.id, 'table_heading', e.target.value)} placeholder="e.g., Stereotactic Computer-assisted surgical navigation" className="w-full px-2 py-1 text-sm border rounded" />
+                            <input type="text" value={entry.table_heading} onChange={(e) => updateCodeTableEntry(entry.id, 'table_heading', e.target.value)} placeholder="e.g., Stereotactic Computer-assisted surgical navigation" className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
                           </div>
 
                           <div className="grid grid-cols-2 gap-2">
                             <div>
                               <label className="block text-xs font-medium text-gray-600 mb-1">Coverage Status</label>
-                              <select value={entry.coverage_status} onChange={(e) => updateCodeTableEntry(entry.id, 'coverage_status', e.target.value)} className="w-full px-2 py-1 text-sm border rounded">
+                              <select value={entry.coverage_status} onChange={(e) => updateCodeTableEntry(entry.id, 'coverage_status', e.target.value)} className="w-full px-2 py-1 text-sm border border-gray-300 rounded">
                                 <option value="covered_if_criteria_met">Covered if criteria met</option>
                                 <option value="not_covered">Not covered</option>
-                                <option value="experimental">Experimental</option>
+                                <option value="experimental">Experimental/Investigational</option>
                                 <option value="other_related">Other related</option>
                               </select>
                             </div>
@@ -656,7 +789,7 @@
                               <div className="flex gap-2 mt-1">
                                 {['Medicare', 'Commercial', 'Medicaid'].map(lob => (
                                   <label key={lob} className="flex items-center gap-1 text-xs">
-                                    <input type="checkbox" checked={entry.lob_applicability.includes(lob)} onChange={() => toggleEntryLOB(entry.id, lob)} className="w-3 h-3" />
+                                    <input type="checkbox" checked={entry.lob_applicability.includes(lob)} onChange={() => toggleEntryLOB(entry.id, lob)} className="w-3 h-3 text-blue-600 rounded" />
                                     {lob.slice(0, 3)}
                                   </label>
                                 ))}
@@ -666,12 +799,12 @@
 
                           <div>
                             <label className="block text-xs font-medium text-gray-600 mb-1">Dependent Codes (comma-separated)</label>
-                            <input type="text" value={entry.dependent_codes} onChange={(e) => updateCodeTableEntry(entry.id, 'dependent_codes', e.target.value)} placeholder="e.g., 22532-22830, 63001-63655" className="w-full px-2 py-1 text-sm border rounded font-mono" />
+                            <input type="text" value={entry.dependent_codes} onChange={(e) => updateCodeTableEntry(entry.id, 'dependent_codes', e.target.value)} placeholder="e.g., 22532-22830, 63001-63655" className="w-full px-2 py-1 text-sm border border-gray-300 rounded font-mono" />
                           </div>
 
                           <div>
                             <label className="block text-xs font-medium text-gray-600 mb-1">Condition Notes</label>
-                            <textarea value={entry.condition_notes} onChange={(e) => updateCodeTableEntry(entry.id, 'condition_notes', e.target.value)} placeholder="Any specific conditions from the table header..." rows={2} className="w-full px-2 py-1 text-sm border rounded resize-none" />
+                            <textarea value={entry.condition_notes} onChange={(e) => updateCodeTableEntry(entry.id, 'condition_notes', e.target.value)} placeholder="Any specific conditions from this table header..." rows={2} className="w-full px-2 py-1 text-sm border border-gray-300 rounded resize-none" />
                           </div>
                         </div>
                       </div>
@@ -680,33 +813,80 @@
                 )}
               </div>
 
-              {/* Section Drop Zones */}
+              {/* Drop Zones */}
               <div className="space-y-3">
-                {['general', 'supplementary', 'exception'].map(type => (
-                  <div key={type}>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 capitalize">{type} {type === 'general' ? '(exactly 1)' : '(0+)'}</label>
-                    <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, type)} className={`min-h-[50px] border-2 border-dashed rounded-lg p-2 ${typeColors[type]}`}>
-                      {currentMappings[type].length > 0 ? (
-                        <div className="space-y-1">
-                          {currentMappings[type].map(sectionId => {
-                            const section = getSectionById(sectionId);
-                            return section ? (
-                              <div key={sectionId} className="flex items-center justify-between bg-white/70 p-2 rounded text-sm">
-                                <span className="font-mono text-xs font-bold mr-2">{sectionId}</span>
-                                <span className="flex-1 truncate text-xs">{section.text}</span>
-                                <button onClick={() => removeMapping(type, sectionId)} className="text-red-500 ml-2"><Trash2 size={12} /></button>
+                {/* General */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">General (exactly 1)</label>
+                  <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, 'general')} className={`min-h-[60px] border-2 border-dashed rounded-lg p-2 transition-colors ${currentMappings.general.length > 0 ? 'border-blue-300 bg-blue-50' : 'border-gray-300 bg-gray-50'}`}>
+                    {currentMappings.general.length > 0 ? (
+                      <div className="space-y-1">
+                        {currentMappings.general.map(sectionId => {
+                          const section = getSectionById(sectionId);
+                          return section ? (
+                            <div key={sectionId} className="flex items-center justify-between bg-blue-100 p-2 rounded text-sm">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-mono text-xs font-bold">{sectionId}</span>
+                                <span className="truncate">{section.text}</span>
                               </div>
-                            ) : null;
-                          })}
-                        </div>
-                      ) : <p className="text-center text-gray-400 text-xs py-2">Drop {type} section here</p>}
-                    </div>
+                              <button onClick={() => removeMapping('general', sectionId)} className="text-red-500 hover:text-red-700 ml-2"><Trash2 size={14} /></button>
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                    ) : <p className="text-center text-gray-400 text-sm py-2">Drop general section here</p>}
                   </div>
-                ))}
+                </div>
+
+                {/* Supplementary */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Supplementary (0 or more)</label>
+                  <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, 'supplementary')} className="min-h-[60px] border-2 border-dashed border-purple-300 bg-purple-50 rounded-lg p-2">
+                    {currentMappings.supplementary.length > 0 ? (
+                      <div className="space-y-1">
+                        {currentMappings.supplementary.map(sectionId => {
+                          const section = getSectionById(sectionId);
+                          return section ? (
+                            <div key={sectionId} className="flex items-center justify-between bg-purple-100 p-2 rounded text-sm">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-mono text-xs font-bold">{sectionId}</span>
+                                <span className="truncate">{section.text}</span>
+                              </div>
+                              <button onClick={() => removeMapping('supplementary', sectionId)} className="text-red-500 hover:text-red-700 ml-2"><Trash2 size={14} /></button>
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                    ) : <p className="text-center text-gray-400 text-sm py-2">Drop supplementary sections here</p>}
+                  </div>
+                </div>
+
+                {/* Exception */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Exception (0 or more)</label>
+                  <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, 'exception')} className="min-h-[60px] border-2 border-dashed border-orange-300 bg-orange-50 rounded-lg p-2">
+                    {currentMappings.exception.length > 0 ? (
+                      <div className="space-y-1">
+                        {currentMappings.exception.map(sectionId => {
+                          const section = getSectionById(sectionId);
+                          return section ? (
+                            <div key={sectionId} className="flex items-center justify-between bg-orange-100 p-2 rounded text-sm">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-mono text-xs font-bold">{sectionId}</span>
+                                <span className="truncate">{section.text}</span>
+                              </div>
+                              <button onClick={() => removeMapping('exception', sectionId)} className="text-red-500 hover:text-red-700 ml-2"><Trash2 size={14} /></button>
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                    ) : <p className="text-center text-gray-400 text-sm py-2">Drop exception sections here</p>}
+                  </div>
+                </div>
               </div>
 
               {/* Save Button */}
-              <button onClick={saveCPTMapping} disabled={!currentCPT.trim()} className={`w-full mt-4 py-3 rounded-lg font-medium ${currentCPT.trim() ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
+              <button onClick={saveCPTMapping} disabled={!currentCPT.trim()} className={`w-full mt-4 py-3 rounded-lg font-medium transition-colors ${currentCPT.trim() ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
                 Save CPT Mapping
               </button>
             </div>
@@ -715,6 +895,7 @@
       );
     }
 
+    // Render the app
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<AnnotationTool />);
   </script>
