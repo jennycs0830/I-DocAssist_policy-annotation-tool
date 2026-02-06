@@ -33,6 +33,7 @@
     const GitBranch = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>);
     const Link = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>);
     const Info = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>);
+    const MessageSquare = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>);
 
     // Instructions Panel
     function InstructionsPanel({ title, children, defaultOpen = true }) {
@@ -68,6 +69,10 @@
       }
     };
 
+    // Default labels
+    const DEFAULT_REQ_KINDS = ['imaging', 'diagnosis', 'prior_treatment', 'documentation', 'lab', 'other'];
+    const DEFAULT_EVIDENCE_SOURCES = ['clinical_note', 'imaging_report', 'therapy_records', 'lab_result', 'prior_auth_form'];
+
     // Main App
     function AnnotationTool() {
       const [currentStage, setCurrentStage] = useState(1);
@@ -76,11 +81,35 @@
       const [sectionTrees, setSectionTrees] = useState({});
       const [cptMappings, setCptMappings] = useState([]);
 
+      // Custom labels state
+      const [customReqKinds, setCustomReqKinds] = useState([]);
+      const [customEvidenceSources, setCustomEvidenceSources] = useState([]);
+
+      // Feedback state
+      const [annotatorNotes, setAnnotatorNotes] = useState('');
+      const [appFeedback, setAppFeedback] = useState('');
+      const [showFeedbackPanel, setShowFeedbackPanel] = useState(false);
+
       const stages = [
         { id: 1, name: 'Section Extraction', icon: FileText },
         { id: 2, name: 'Atomic Breakdown', icon: GitBranch },
         { id: 3, name: 'CPT Mapping', icon: Link }
       ];
+
+      const allReqKinds = [...DEFAULT_REQ_KINDS, ...customReqKinds];
+      const allEvidenceSources = [...DEFAULT_EVIDENCE_SOURCES, ...customEvidenceSources];
+
+      const addCustomReqKind = (label) => {
+        if (label && !allReqKinds.includes(label)) {
+          setCustomReqKinds([...customReqKinds, label]);
+        }
+      };
+
+      const addCustomEvidenceSource = (label) => {
+        if (label && !allEvidenceSources.includes(label)) {
+          setCustomEvidenceSources([...customEvidenceSources, label]);
+        }
+      };
 
       const canProceed = () => {
         if (currentStage === 1) return sections.length > 0 && documentTitle.trim() !== '';
@@ -108,7 +137,19 @@
           };
         });
 
-        const exportObj = { document_title: documentTitle, sections: sectionsExport, logic_trees: logicTreesExport, cpt_mappings: cptMappingsExport };
+        const exportObj = {
+          document_title: documentTitle,
+          sections: sectionsExport,
+          logic_trees: logicTreesExport,
+          cpt_mappings: cptMappingsExport,
+          custom_labels: {
+            req_kinds: customReqKinds,
+            evidence_sources: customEvidenceSources
+          },
+          annotator_notes: annotatorNotes,
+          app_feedback: appFeedback,
+          exported_at: new Date().toISOString()
+        };
         const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -124,9 +165,14 @@
             <div className="max-w-7xl mx-auto">
               <div className="flex items-center justify-between mb-4">
                 <h1 className="text-2xl font-bold text-gray-900">Policy Annotation Tool</h1>
-                <button onClick={exportData} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-                  <Download size={18} /> Export JSON
-                </button>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setShowFeedbackPanel(!showFeedbackPanel)} className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${showFeedbackPanel ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+                    <MessageSquare size={18} /> Notes & Feedback
+                  </button>
+                  <button onClick={exportData} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                    <Download size={18} /> Export JSON
+                  </button>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 {stages.map((stage, idx) => (
@@ -142,6 +188,49 @@
             </div>
           </header>
 
+          {/* Feedback Panel */}
+          {showFeedbackPanel && (
+            <div className="max-w-7xl mx-auto px-6 py-4">
+              <div className="bg-purple-50 border border-purple-200 rounded-xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-purple-900 flex items-center gap-2">
+                    <MessageSquare size={20} /> Annotator Notes & App Feedback
+                  </h2>
+                  <button onClick={() => setShowFeedbackPanel(false)} className="text-purple-600 hover:text-purple-800">
+                    <span className="text-sm">Close</span>
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-purple-800 mb-2">
+                      Annotator Notes <span className="text-purple-500 font-normal">(notes about this document annotation)</span>
+                    </label>
+                    <textarea
+                      value={annotatorNotes}
+                      onChange={(e) => setAnnotatorNotes(e.target.value)}
+                      placeholder="Add any notes about this document, special cases, ambiguities you encountered, decisions you made..."
+                      rows={5}
+                      className="w-full px-4 py-3 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-purple-800 mb-2">
+                      App Feedback <span className="text-purple-500 font-normal">(suggestions for improving this tool)</span>
+                    </label>
+                    <textarea
+                      value={appFeedback}
+                      onChange={(e) => setAppFeedback(e.target.value)}
+                      placeholder="Share feedback about the annotation tool: bugs, feature requests, UI improvements, confusing parts..."
+                      rows={5}
+                      className="w-full px-4 py-3 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none bg-white"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-purple-600 mt-3">These notes will be included in the exported JSON file.</p>
+              </div>
+            </div>
+          )}
+
           <div className="max-w-7xl mx-auto px-6 py-4">
             <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">Document Title <span className="text-red-500">*</span></label>
@@ -151,7 +240,7 @@
 
           <main className="max-w-7xl mx-auto px-6 pb-24">
             {currentStage === 1 && <Stage1SectionExtraction sections={sections} setSections={setSections} />}
-            {currentStage === 2 && <Stage2AtomicBreakdown sections={sections} sectionTrees={sectionTrees} setSectionTrees={setSectionTrees} />}
+            {currentStage === 2 && <Stage2AtomicBreakdown sections={sections} sectionTrees={sectionTrees} setSectionTrees={setSectionTrees} allReqKinds={allReqKinds} allEvidenceSources={allEvidenceSources} addCustomReqKind={addCustomReqKind} addCustomEvidenceSource={addCustomEvidenceSource} />}
             {currentStage === 3 && <Stage3CPTMapping sections={sections} sectionTrees={sectionTrees} cptMappings={cptMappings} setCptMappings={setCptMappings} />}
           </main>
 
@@ -208,11 +297,9 @@
 
       return (
         <div>
-          {/* Detailed Instructions from v4 */}
           <InstructionsPanel title="Stage 1 Instructions: Section-level Requirement Extraction">
             <div className="space-y-3">
               <p><strong>Goal:</strong> Extract requirement sections from the policy document and classify them by type.</p>
-
               <div>
                 <p className="font-medium mb-1">Steps:</p>
                 <ol className="list-decimal list-inside space-y-1 ml-2">
@@ -224,22 +311,19 @@
                   <li>Repeat for all requirement sections in the document</li>
                 </ol>
               </div>
-
               <div>
                 <p className="font-medium mb-1">Section Types:</p>
                 <ul className="space-y-1 ml-2">
-                  <li><span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium">General</span> — Primary medical necessity criteria for a procedure/indication (e.g., "all of the following criteria must be met")</li>
-                  <li><span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-800 rounded text-xs font-medium">Supplementary</span> — Additional requirements, definitions, documentation requirements, or global constraints that co-apply</li>
-                  <li><span className="inline-block px-2 py-0.5 bg-orange-100 text-orange-800 rounded text-xs font-medium">Exception</span> — Not covered, not medically necessary, investigational, exclusions, waivers, or override conditions</li>
+                  <li><span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium">General</span> — Primary medical necessity criteria for a procedure/indication</li>
+                  <li><span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-800 rounded text-xs font-medium">Supplementary</span> — Additional requirements, definitions, documentation requirements</li>
+                  <li><span className="inline-block px-2 py-0.5 bg-orange-100 text-orange-800 rounded text-xs font-medium">Exception</span> — Not covered, exclusions, waivers, or override conditions</li>
                 </ul>
               </div>
-
-              <p className="text-blue-600 italic">💡 Tip: Keep sections as cohesive units. If there's a clear procedure/anatomy heading with its criteria checklist, keep them together as one section.</p>
+              <p className="text-blue-600 italic">💡 Tip: Keep sections as cohesive units. If there's a clear procedure/anatomy heading with its criteria checklist, keep them together.</p>
             </div>
           </InstructionsPanel>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left: Input Form */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">{editingId ? 'Edit Section' : 'Add New Section'}</h2>
               <div className="space-y-4">
@@ -266,7 +350,6 @@
               </div>
             </div>
 
-            {/* Right: Sections List */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Extracted Sections ({sections.length})</h2>
               {sections.length === 0 ? (
@@ -303,7 +386,7 @@
     }
 
     // Stage 2: Atomic Breakdown with Tree Builder
-    function Stage2AtomicBreakdown({ sections, sectionTrees, setSectionTrees }) {
+    function Stage2AtomicBreakdown({ sections, sectionTrees, setSectionTrees, allReqKinds, allEvidenceSources, addCustomReqKind, addCustomEvidenceSource }) {
       const [selectedSectionId, setSelectedSectionId] = useState(sections.length > 0 ? sections[0].id : null);
       const currentSection = sections.find(s => s.id === selectedSectionId);
       const currentTree = sectionTrees[selectedSectionId] || null;
@@ -312,11 +395,9 @@
 
       return (
         <div>
-          {/* Detailed Instructions from v4 */}
           <InstructionsPanel title="Stage 2 Instructions: Break Section Requirements into Atomic Items">
             <div className="space-y-3">
               <p><strong>Goal:</strong> Convert each section's requirements into a structured logic tree with atomic (individual, checkable) items.</p>
-
               <div>
                 <p className="font-medium mb-1">Steps:</p>
                 <ol className="list-decimal list-inside space-y-1 ml-2">
@@ -329,32 +410,28 @@
                   <li>Repeat for all sections</li>
                 </ol>
               </div>
-
               <div>
                 <p className="font-medium mb-1">Logic Operators:</p>
                 <ul className="space-y-1 ml-2">
-                  <li><span className="inline-block px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs font-mono font-bold">ALL</span> — All children must be satisfied (AND logic) — use for "all of the following"</li>
-                  <li><span className="inline-block px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded text-xs font-mono font-bold">ANY</span> — At least one child must be satisfied (OR logic) — use for "any of the following" or "either/or"</li>
-                  <li><span className="inline-block px-2 py-0.5 bg-red-100 text-red-800 rounded text-xs font-mono font-bold">NOT</span> — The child must NOT be satisfied — use for "must not" or exclusions</li>
-                  <li><span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-mono font-bold">IF</span> — Conditional: if first child is true, check remaining children</li>
-                  <li><span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-800 rounded text-xs font-mono font-bold">UNLESS</span> — Required unless the child condition is met — use for "required unless..."</li>
+                  <li><span className="inline-block px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs font-mono font-bold">ALL</span> — All children must be satisfied (AND)</li>
+                  <li><span className="inline-block px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded text-xs font-mono font-bold">ANY</span> — At least one child must be satisfied (OR)</li>
+                  <li><span className="inline-block px-2 py-0.5 bg-red-100 text-red-800 rounded text-xs font-mono font-bold">NOT</span> — Must NOT be satisfied</li>
+                  <li><span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-mono font-bold">IF</span> — Conditional: if first child is true, check remaining</li>
+                  <li><span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-800 rounded text-xs font-mono font-bold">UNLESS</span> — Required unless condition is met</li>
                 </ul>
               </div>
-
               <div>
                 <p className="font-medium mb-1">Leaf Node Fields:</p>
                 <ul className="space-y-1 ml-2">
-                  <li><code className="bg-gray-200 px-1 rounded">req_kind</code>: What type of requirement (imaging, diagnosis, prior_treatment, documentation, lab, other)</li>
-                  <li><code className="bg-gray-200 px-1 rounded">evidence_source</code>: Where to verify this requirement (clinical_note, imaging_report, therapy_records, lab_result, prior_auth_form)</li>
+                  <li><code className="bg-gray-200 px-1 rounded">req_kind</code>: Type of requirement — <strong>select existing or type a new custom label</strong></li>
+                  <li><code className="bg-gray-200 px-1 rounded">evidence_source</code>: Where to verify — <strong>select existing or type a new custom label</strong></li>
                 </ul>
               </div>
-
-              <p className="text-blue-600 italic">💡 Tip: Start by adding all atomic items, then wrap them with appropriate operators. Click the "+" on any operator node to add children directly.</p>
+              <p className="text-blue-600 italic">💡 Tip: If none of the existing labels fit, select "+ Add custom..." to create your own!</p>
             </div>
           </InstructionsPanel>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Left: Section Selector */}
             <div className="lg:col-span-3 bg-white rounded-xl border border-gray-200 p-4">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Sections</h2>
               <div className="space-y-2 max-h-[600px] overflow-y-auto">
@@ -370,7 +447,6 @@
               </div>
             </div>
 
-            {/* Middle: Section Content Reference */}
             <div className="lg:col-span-4 bg-white rounded-xl border border-gray-200 p-4">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Section Content</h2>
               {currentSection ? (
@@ -383,10 +459,9 @@
               ) : <p className="text-gray-500 text-center py-8">Select a section</p>}
             </div>
 
-            {/* Right: Tree Builder */}
             <div className="lg:col-span-5 bg-white rounded-xl border border-gray-200 p-4">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Logic Tree Builder</h2>
-              {selectedSectionId && <TreeBuilder tree={currentTree} setTree={updateTree} />}
+              {selectedSectionId && <TreeBuilder tree={currentTree} setTree={updateTree} allReqKinds={allReqKinds} allEvidenceSources={allEvidenceSources} addCustomReqKind={addCustomReqKind} addCustomEvidenceSource={addCustomEvidenceSource} />}
             </div>
           </div>
         </div>
@@ -394,7 +469,7 @@
     }
 
     // Tree Builder Component
-    function TreeBuilder({ tree, setTree }) {
+    function TreeBuilder({ tree, setTree, allReqKinds, allEvidenceSources, addCustomReqKind, addCustomEvidenceSource }) {
       const [newItemText, setNewItemText] = useState('');
       const createNode = (type, children = [], text = '') => ({ id: `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, type, text, children, req_kind: '', evidence_source: '' });
       const operators = ['ALL', 'ANY', 'NOT', 'IF', 'UNLESS'];
@@ -442,19 +517,16 @@
 
       return (
         <div className="space-y-4">
-          {/* Add new item */}
           <div className="flex gap-2">
             <input type="text" value={newItemText} onChange={(e) => setNewItemText(e.target.value)} placeholder="Paste atomic requirement text..." className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" onKeyPress={(e) => e.key === 'Enter' && addLeafNode()} />
             <button onClick={addLeafNode} disabled={!newItemText.trim()} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"><Plus size={18} /></button>
           </div>
 
-          {/* Operator buttons */}
           <div className="flex flex-wrap gap-2">
             <span className="text-sm text-gray-600 py-1">Wrap tree with:</span>
             {operators.map(op => <button key={op} onClick={() => wrapWithOperator(op)} className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg font-mono">{op}</button>)}
           </div>
 
-          {/* Tree visualization */}
           <div className="border border-gray-200 rounded-lg p-4 min-h-[300px] max-h-[400px] overflow-y-auto bg-gray-50">
             {!tree ? (
               <div className="text-center py-8 text-gray-500">
@@ -462,14 +534,63 @@
                 <p className="text-sm">Add atomic items or initialize with an operator.</p>
                 <button onClick={initializeTree} className="mt-4 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200">Initialize with ALL</button>
               </div>
-            ) : <TreeNode node={tree} depth={0} updateNode={updateNode} deleteNode={deleteNode} addChildToNode={addChildToNode} createNode={createNode} />}
+            ) : <TreeNode node={tree} depth={0} updateNode={updateNode} deleteNode={deleteNode} addChildToNode={addChildToNode} createNode={createNode} allReqKinds={allReqKinds} allEvidenceSources={allEvidenceSources} addCustomReqKind={addCustomReqKind} addCustomEvidenceSource={addCustomEvidenceSource} />}
           </div>
         </div>
       );
     }
 
+    // Custom Label Select Component
+    function CustomLabelSelect({ value, onChange, options, onAddCustom, placeholder }) {
+      const [showCustomInput, setShowCustomInput] = useState(false);
+      const [customValue, setCustomValue] = useState('');
+
+      const handleSelectChange = (e) => {
+        if (e.target.value === '__add_custom__') {
+          setShowCustomInput(true);
+        } else {
+          onChange(e.target.value);
+        }
+      };
+
+      const handleAddCustom = () => {
+        if (customValue.trim()) {
+          onAddCustom(customValue.trim());
+          onChange(customValue.trim());
+          setCustomValue('');
+          setShowCustomInput(false);
+        }
+      };
+
+      if (showCustomInput) {
+        return (
+          <div className="flex gap-1">
+            <input
+              type="text"
+              value={customValue}
+              onChange={(e) => setCustomValue(e.target.value)}
+              placeholder="New label..."
+              className="flex-1 px-2 py-1 text-xs border border-blue-300 rounded bg-white"
+              onKeyPress={(e) => e.key === 'Enter' && handleAddCustom()}
+              autoFocus
+            />
+            <button onClick={handleAddCustom} className="px-2 py-1 text-xs bg-blue-600 text-white rounded">Add</button>
+            <button onClick={() => { setShowCustomInput(false); setCustomValue(''); }} className="px-2 py-1 text-xs text-gray-500">×</button>
+          </div>
+        );
+      }
+
+      return (
+        <select value={value || ''} onChange={handleSelectChange} className="text-xs px-2 py-1 border border-gray-200 rounded bg-white">
+          <option value="">{placeholder}</option>
+          {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+          <option value="__add_custom__">+ Add custom...</option>
+        </select>
+      );
+    }
+
     // Tree Node Component (recursive)
-    function TreeNode({ node, depth, updateNode, deleteNode, addChildToNode, createNode }) {
+    function TreeNode({ node, depth, updateNode, deleteNode, addChildToNode, createNode, allReqKinds, allEvidenceSources, addCustomReqKind, addCustomEvidenceSource }) {
       const [isExpanded, setIsExpanded] = useState(true);
       const [isEditing, setIsEditing] = useState(false);
       const [editText, setEditText] = useState(node.text);
@@ -505,15 +626,23 @@
                 </div>
               ) : <p className="text-sm cursor-pointer hover:bg-black/5 rounded p-1 -m-1" onClick={() => setIsEditing(true)}>{node.text || <em className="text-gray-400">Click to edit</em>}</p>}
 
-              {/* Leaf node metadata */}
+              {/* Leaf node metadata with custom label support */}
               {!isOperator && (
-                <div className="flex gap-2 mt-2">
-                  <select value={node.req_kind || ''} onChange={(e) => updateNode(node.id, { req_kind: e.target.value })} className="text-xs px-2 py-1 border border-gray-200 rounded bg-white">
-                    <option value="">req_kind...</option><option value="imaging">imaging</option><option value="diagnosis">diagnosis</option><option value="prior_treatment">prior_treatment</option><option value="documentation">documentation</option><option value="lab">lab</option><option value="other">other</option>
-                  </select>
-                  <select value={node.evidence_source || ''} onChange={(e) => updateNode(node.id, { evidence_source: e.target.value })} className="text-xs px-2 py-1 border border-gray-200 rounded bg-white">
-                    <option value="">evidence_source...</option><option value="clinical_note">clinical_note</option><option value="imaging_report">imaging_report</option><option value="therapy_records">therapy_records</option><option value="lab_result">lab_result</option><option value="prior_auth_form">prior_auth_form</option>
-                  </select>
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  <CustomLabelSelect
+                    value={node.req_kind}
+                    onChange={(val) => updateNode(node.id, { req_kind: val })}
+                    options={allReqKinds}
+                    onAddCustom={addCustomReqKind}
+                    placeholder="req_kind..."
+                  />
+                  <CustomLabelSelect
+                    value={node.evidence_source}
+                    onChange={(val) => updateNode(node.id, { evidence_source: val })}
+                    options={allEvidenceSources}
+                    onAddCustom={addCustomEvidenceSource}
+                    placeholder="evidence_source..."
+                  />
                 </div>
               )}
             </div>
@@ -524,7 +653,6 @@
             </div>
           </div>
 
-          {/* Add child form */}
           {showAddChild && (
             <div className="ml-6 mb-2 p-2 bg-gray-100 rounded-lg flex gap-2 items-center">
               <select value={newChildOp} onChange={(e) => setNewChildOp(e.target.value)} className="text-xs px-2 py-1 border border-gray-300 rounded">
@@ -537,13 +665,12 @@
             </div>
           )}
 
-          {/* Children */}
-          {isExpanded && node.children?.map(child => <TreeNode key={child.id} node={child} depth={depth + 1} updateNode={updateNode} deleteNode={deleteNode} addChildToNode={addChildToNode} createNode={createNode} />)}
+          {isExpanded && node.children?.map(child => <TreeNode key={child.id} node={child} depth={depth + 1} updateNode={updateNode} deleteNode={deleteNode} addChildToNode={addChildToNode} createNode={createNode} allReqKinds={allReqKinds} allEvidenceSources={allEvidenceSources} addCustomReqKind={addCustomReqKind} addCustomEvidenceSource={addCustomEvidenceSource} />)}
         </div>
       );
     }
 
-    // Stage 3: CPT Code Mapping with Multiple Code Table Entries (from v5)
+    // Stage 3: CPT Code Mapping with Multiple Code Table Entries
     function Stage3CPTMapping({ sections, sectionTrees, cptMappings, setCptMappings }) {
       const [currentCPT, setCurrentCPT] = useState('');
       const [currentMappings, setCurrentMappings] = useState({ general: [], supplementary: [], exception: [] });
@@ -551,7 +678,6 @@
 
       const typeColors = { general: 'bg-blue-100 text-blue-800 border-blue-200', supplementary: 'bg-purple-100 text-purple-800 border-purple-200', exception: 'bg-orange-100 text-orange-800 border-orange-200' };
 
-      // Code Table Entry management
       const addCodeTableEntry = () => {
         setCodeTableEntries([...codeTableEntries, {
           id: `entry_${Date.now()}`,
@@ -652,50 +778,28 @@
 
       return (
         <div>
-          {/* Detailed Instructions - combining v4 style with v5 code table entries explanation */}
           <InstructionsPanel title="Stage 3 Instructions: CPT Code Mapping">
             <div className="space-y-3">
-              <p><strong>Goal:</strong> Map each CPT/HCPCS code from the policy's code table to its relevant requirement sections, and capture any additional code-specific requirements from the table.</p>
-
+              <p><strong>Goal:</strong> Map each CPT/HCPCS code from the policy's code table to its relevant requirement sections.</p>
               <div>
                 <p className="font-medium mb-1">Steps:</p>
                 <ol className="list-decimal list-inside space-y-1 ml-2">
                   <li>Find the CPT/HCPCS codes table in the policy document</li>
                   <li>Enter the CPT code in the input box</li>
-                  <li>Add <strong>Code Table Entries</strong> for each table header where this code appears (click "Add Entry")</li>
+                  <li>Add <strong>Code Table Entries</strong> for each table header where this code appears</li>
                   <li>Drag sections from the middle panel to the appropriate drop zones</li>
                   <li>Click "Save CPT Mapping"</li>
-                  <li>Repeat for all CPT codes in the document</li>
                 </ol>
               </div>
-
               <div>
-                <p className="font-medium mb-1">Code Table Entries (Multiple per CPT Code):</p>
-                <p className="ml-2 mb-2 text-sm">A single CPT code may appear under <strong>multiple headers</strong> in the code table, each with different coverage conditions. Add a separate entry for each relevant table header.</p>
-                <ul className="space-y-1 ml-2">
-                  <li><strong>Table Heading:</strong> The section header in the code table (e.g., "Stereotactic Computer-assisted surgical navigation", "Cervical/Thoracic - covered if criteria are met")</li>
-                  <li><strong>Coverage Status:</strong> Whether the code is covered if criteria met, not covered, experimental, etc. under this header</li>
-                  <li><strong>LOB Applicability:</strong> Which lines of business this applies to (Medicare, Commercial, Medicaid) — often indicated in the table header</li>
-                  <li><strong>Dependent Codes:</strong> If approval depends on other codes being met first (e.g., "approved if 22532-22830 are met")</li>
-                  <li><strong>Condition Notes:</strong> Any additional conditions or context from this table header</li>
-                </ul>
+                <p className="font-medium mb-1">Code Table Entries:</p>
+                <p className="ml-2 text-sm">A CPT code may appear under multiple headers. Add an entry for each.</p>
               </div>
-
-              <div>
-                <p className="font-medium mb-1">Section Mapping Rules:</p>
-                <ul className="space-y-1 ml-2">
-                  <li><span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium">General</span> — Exactly <strong>1</strong> primary medical necessity section</li>
-                  <li><span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-800 rounded text-xs font-medium">Supplementary</span> — <strong>0 or more</strong> additional requirements</li>
-                  <li><span className="inline-block px-2 py-0.5 bg-orange-100 text-orange-800 rounded text-xs font-medium">Exception</span> — <strong>0 or more</strong> exclusions/exceptions</li>
-                </ul>
-              </div>
-
-              <p className="text-blue-600 italic">💡 Tip: Pay attention to code table headers! The same code can have different coverage status and LOB under different headers (e.g., "Not covered for Medicare" vs "Covered if criteria are met for Commercial").</p>
+              <p className="text-blue-600 italic">💡 Tip: Pay attention to code table headers for LOB-specific coverage!</p>
             </div>
           </InstructionsPanel>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Left: Saved Mappings */}
             <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-4">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Saved Mappings</h2>
               <div className="space-y-2 max-h-[700px] overflow-y-auto">
@@ -716,10 +820,9 @@
               </div>
             </div>
 
-            {/* Middle: Available Sections */}
             <div className="lg:col-span-3 bg-white rounded-xl border border-gray-200 p-4">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Available Sections</h2>
-              <p className="text-sm text-gray-600 mb-4">Drag sections to map them to the current CPT code</p>
+              <p className="text-sm text-gray-600 mb-4">Drag sections to map them</p>
               <div className="space-y-2 max-h-[650px] overflow-y-auto">
                 {sections.map((section) => (
                   <div key={section.id} draggable onDragStart={(e) => handleDragStart(e, section)} className={`p-3 rounded-lg border-2 cursor-grab active:cursor-grabbing ${typeColors[section.type]} hover:shadow-md transition-shadow`}>
@@ -738,17 +841,14 @@
               </div>
             </div>
 
-            {/* Right: CPT Mapping Area */}
             <div className="lg:col-span-7 bg-white rounded-xl border border-gray-200 p-4 max-h-[800px] overflow-y-auto">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">CPT Code Mapping</h2>
 
-              {/* CPT Input */}
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">CPT/HCPCS Code</label>
-                <input type="text" value={currentCPT} onChange={(e) => setCurrentCPT(e.target.value.toUpperCase())} placeholder="Enter CPT code (e.g., 27447, 61782)" className="w-full px-4 py-2 border border-gray-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-500" />
+                <input type="text" value={currentCPT} onChange={(e) => setCurrentCPT(e.target.value.toUpperCase())} placeholder="Enter CPT code (e.g., 27447)" className="w-full px-4 py-2 border border-gray-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-500" />
               </div>
 
-              {/* Code Table Entries Section (from v5) */}
               <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold text-amber-900">📋 Code Table Entries ({codeTableEntries.length})</h3>
@@ -758,7 +858,7 @@
                 </div>
 
                 {codeTableEntries.length === 0 ? (
-                  <p className="text-sm text-amber-700 text-center py-4">No code table entries yet. Click "Add Entry" to capture information from each table header where this code appears.</p>
+                  <p className="text-sm text-amber-700 text-center py-4">No code table entries yet. Click "Add Entry" to capture table header information.</p>
                 ) : (
                   <div className="space-y-3">
                     {codeTableEntries.map((entry, idx) => (
@@ -767,20 +867,18 @@
                           <span className="text-xs font-semibold text-amber-800">Entry {idx + 1}</span>
                           <button onClick={() => removeCodeTableEntry(entry.id)} className="text-red-500 hover:text-red-700"><Trash2 size={14} /></button>
                         </div>
-
                         <div className="space-y-2">
                           <div>
                             <label className="block text-xs font-medium text-gray-600 mb-1">Table Heading</label>
-                            <input type="text" value={entry.table_heading} onChange={(e) => updateCodeTableEntry(entry.id, 'table_heading', e.target.value)} placeholder="e.g., Stereotactic Computer-assisted surgical navigation" className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
+                            <input type="text" value={entry.table_heading} onChange={(e) => updateCodeTableEntry(entry.id, 'table_heading', e.target.value)} placeholder="e.g., Stereotactic surgical navigation" className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
                           </div>
-
                           <div className="grid grid-cols-2 gap-2">
                             <div>
                               <label className="block text-xs font-medium text-gray-600 mb-1">Coverage Status</label>
                               <select value={entry.coverage_status} onChange={(e) => updateCodeTableEntry(entry.id, 'coverage_status', e.target.value)} className="w-full px-2 py-1 text-sm border border-gray-300 rounded">
                                 <option value="covered_if_criteria_met">Covered if criteria met</option>
                                 <option value="not_covered">Not covered</option>
-                                <option value="experimental">Experimental/Investigational</option>
+                                <option value="experimental">Experimental</option>
                                 <option value="other_related">Other related</option>
                               </select>
                             </div>
@@ -796,15 +894,13 @@
                               </div>
                             </div>
                           </div>
-
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Dependent Codes (comma-separated)</label>
-                            <input type="text" value={entry.dependent_codes} onChange={(e) => updateCodeTableEntry(entry.id, 'dependent_codes', e.target.value)} placeholder="e.g., 22532-22830, 63001-63655" className="w-full px-2 py-1 text-sm border border-gray-300 rounded font-mono" />
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Dependent Codes</label>
+                            <input type="text" value={entry.dependent_codes} onChange={(e) => updateCodeTableEntry(entry.id, 'dependent_codes', e.target.value)} placeholder="e.g., 22532-22830" className="w-full px-2 py-1 text-sm border border-gray-300 rounded font-mono" />
                           </div>
-
                           <div>
                             <label className="block text-xs font-medium text-gray-600 mb-1">Condition Notes</label>
-                            <textarea value={entry.condition_notes} onChange={(e) => updateCodeTableEntry(entry.id, 'condition_notes', e.target.value)} placeholder="Any specific conditions from this table header..." rows={2} className="w-full px-2 py-1 text-sm border border-gray-300 rounded resize-none" />
+                            <textarea value={entry.condition_notes} onChange={(e) => updateCodeTableEntry(entry.id, 'condition_notes', e.target.value)} placeholder="Any specific conditions..." rows={2} className="w-full px-2 py-1 text-sm border border-gray-300 rounded resize-none" />
                           </div>
                         </div>
                       </div>
@@ -813,80 +909,31 @@
                 )}
               </div>
 
-              {/* Drop Zones */}
               <div className="space-y-3">
-                {/* General */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">General (exactly 1)</label>
-                  <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, 'general')} className={`min-h-[60px] border-2 border-dashed rounded-lg p-2 transition-colors ${currentMappings.general.length > 0 ? 'border-blue-300 bg-blue-50' : 'border-gray-300 bg-gray-50'}`}>
-                    {currentMappings.general.length > 0 ? (
-                      <div className="space-y-1">
-                        {currentMappings.general.map(sectionId => {
-                          const section = getSectionById(sectionId);
-                          return section ? (
-                            <div key={sectionId} className="flex items-center justify-between bg-blue-100 p-2 rounded text-sm">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="font-mono text-xs font-bold">{sectionId}</span>
-                                <span className="truncate">{section.text}</span>
+                {['general', 'supplementary', 'exception'].map(type => (
+                  <div key={type}>
+                    <label className="block text-sm font-medium text-gray-700 mb-2 capitalize">{type} {type === 'general' ? '(exactly 1)' : '(0+)'}</label>
+                    <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, type)} className={`min-h-[50px] border-2 border-dashed rounded-lg p-2 ${typeColors[type]}`}>
+                      {currentMappings[type].length > 0 ? (
+                        <div className="space-y-1">
+                          {currentMappings[type].map(sectionId => {
+                            const section = getSectionById(sectionId);
+                            return section ? (
+                              <div key={sectionId} className="flex items-center justify-between bg-white/70 p-2 rounded text-sm">
+                                <span className="font-mono text-xs font-bold mr-2">{sectionId}</span>
+                                <span className="flex-1 truncate text-xs">{section.text}</span>
+                                <button onClick={() => removeMapping(type, sectionId)} className="text-red-500 ml-2"><Trash2 size={12} /></button>
                               </div>
-                              <button onClick={() => removeMapping('general', sectionId)} className="text-red-500 hover:text-red-700 ml-2"><Trash2 size={14} /></button>
-                            </div>
-                          ) : null;
-                        })}
-                      </div>
-                    ) : <p className="text-center text-gray-400 text-sm py-2">Drop general section here</p>}
+                            ) : null;
+                          })}
+                        </div>
+                      ) : <p className="text-center text-gray-400 text-xs py-2">Drop {type} section here</p>}
+                    </div>
                   </div>
-                </div>
-
-                {/* Supplementary */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Supplementary (0 or more)</label>
-                  <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, 'supplementary')} className="min-h-[60px] border-2 border-dashed border-purple-300 bg-purple-50 rounded-lg p-2">
-                    {currentMappings.supplementary.length > 0 ? (
-                      <div className="space-y-1">
-                        {currentMappings.supplementary.map(sectionId => {
-                          const section = getSectionById(sectionId);
-                          return section ? (
-                            <div key={sectionId} className="flex items-center justify-between bg-purple-100 p-2 rounded text-sm">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="font-mono text-xs font-bold">{sectionId}</span>
-                                <span className="truncate">{section.text}</span>
-                              </div>
-                              <button onClick={() => removeMapping('supplementary', sectionId)} className="text-red-500 hover:text-red-700 ml-2"><Trash2 size={14} /></button>
-                            </div>
-                          ) : null;
-                        })}
-                      </div>
-                    ) : <p className="text-center text-gray-400 text-sm py-2">Drop supplementary sections here</p>}
-                  </div>
-                </div>
-
-                {/* Exception */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Exception (0 or more)</label>
-                  <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, 'exception')} className="min-h-[60px] border-2 border-dashed border-orange-300 bg-orange-50 rounded-lg p-2">
-                    {currentMappings.exception.length > 0 ? (
-                      <div className="space-y-1">
-                        {currentMappings.exception.map(sectionId => {
-                          const section = getSectionById(sectionId);
-                          return section ? (
-                            <div key={sectionId} className="flex items-center justify-between bg-orange-100 p-2 rounded text-sm">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="font-mono text-xs font-bold">{sectionId}</span>
-                                <span className="truncate">{section.text}</span>
-                              </div>
-                              <button onClick={() => removeMapping('exception', sectionId)} className="text-red-500 hover:text-red-700 ml-2"><Trash2 size={14} /></button>
-                            </div>
-                          ) : null;
-                        })}
-                      </div>
-                    ) : <p className="text-center text-gray-400 text-sm py-2">Drop exception sections here</p>}
-                  </div>
-                </div>
+                ))}
               </div>
 
-              {/* Save Button */}
-              <button onClick={saveCPTMapping} disabled={!currentCPT.trim()} className={`w-full mt-4 py-3 rounded-lg font-medium transition-colors ${currentCPT.trim() ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
+              <button onClick={saveCPTMapping} disabled={!currentCPT.trim()} className={`w-full mt-4 py-3 rounded-lg font-medium ${currentCPT.trim() ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
                 Save CPT Mapping
               </button>
             </div>
@@ -895,7 +942,6 @@
       );
     }
 
-    // Render the app
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<AnnotationTool />);
   </script>
