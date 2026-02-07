@@ -34,6 +34,7 @@
     const Link = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>);
     const Info = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>);
     const MessageSquare = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>);
+    const Upload = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>);
 
     // Instructions Panel
     function InstructionsPanel({ title, children, defaultOpen = true }) {
@@ -72,6 +73,7 @@
     // Default labels
     const DEFAULT_REQ_KINDS = ['imaging', 'diagnosis', 'prior_treatment', 'documentation', 'lab', 'other'];
     const DEFAULT_EVIDENCE_SOURCES = ['clinical_note', 'imaging_report', 'therapy_records', 'lab_result', 'prior_auth_form'];
+    const DEFAULT_LOBS = ['Medicare', 'Commercial', 'Medicaid'];
 
     // Main App
     function AnnotationTool() {
@@ -84,6 +86,7 @@
       // Custom labels state
       const [customReqKinds, setCustomReqKinds] = useState([]);
       const [customEvidenceSources, setCustomEvidenceSources] = useState([]);
+      const [customLOBs, setCustomLOBs] = useState([]);
 
       // Feedback state
       const [annotatorNotes, setAnnotatorNotes] = useState('');
@@ -98,6 +101,7 @@
 
       const allReqKinds = [...DEFAULT_REQ_KINDS, ...customReqKinds];
       const allEvidenceSources = [...DEFAULT_EVIDENCE_SOURCES, ...customEvidenceSources];
+      const allLOBs = [...DEFAULT_LOBS, ...customLOBs];
 
       const addCustomReqKind = (label) => {
         if (label && !allReqKinds.includes(label)) {
@@ -108,6 +112,12 @@
       const addCustomEvidenceSource = (label) => {
         if (label && !allEvidenceSources.includes(label)) {
           setCustomEvidenceSources([...customEvidenceSources, label]);
+        }
+      };
+
+      const addCustomLOB = (label) => {
+        if (label && !allLOBs.includes(label)) {
+          setCustomLOBs([...customLOBs, label]);
         }
       };
 
@@ -137,26 +147,134 @@
           };
         });
 
-        const exportObj = {
+        const timestamp = new Date().toISOString();
+        const filePrefix = documentTitle.replace(/\s+/g, '_') || 'annotation';
+
+        // Main annotation export (without notes/feedback)
+        const mainExport = {
           document_title: documentTitle,
           sections: sectionsExport,
           logic_trees: logicTreesExport,
           cpt_mappings: cptMappingsExport,
           custom_labels: {
             req_kinds: customReqKinds,
-            evidence_sources: customEvidenceSources
+            evidence_sources: customEvidenceSources,
+            lobs: customLOBs
           },
+          exported_at: timestamp
+        };
+
+        // Notes/feedback export (separate file)
+        const feedbackExport = {
+          document_title: documentTitle,
           annotator_notes: annotatorNotes,
           app_feedback: appFeedback,
-          exported_at: new Date().toISOString()
+          exported_at: timestamp
         };
-        const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${documentTitle.replace(/\s+/g, '_') || 'annotation'}_export.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+
+        // Download main annotation file
+        const mainBlob = new Blob([JSON.stringify(mainExport, null, 2)], { type: 'application/json' });
+        const mainUrl = URL.createObjectURL(mainBlob);
+        const mainLink = document.createElement('a');
+        mainLink.href = mainUrl;
+        mainLink.download = `${filePrefix}_annotation.json`;
+        mainLink.click();
+        URL.revokeObjectURL(mainUrl);
+
+        // Download feedback file only if there's content
+        if (annotatorNotes.trim() || appFeedback.trim()) {
+          setTimeout(() => {
+            const feedbackBlob = new Blob([JSON.stringify(feedbackExport, null, 2)], { type: 'application/json' });
+            const feedbackUrl = URL.createObjectURL(feedbackBlob);
+            const feedbackLink = document.createElement('a');
+            feedbackLink.href = feedbackUrl;
+            feedbackLink.download = `${filePrefix}_feedback.json`;
+            feedbackLink.click();
+            URL.revokeObjectURL(feedbackUrl);
+          }, 500);
+        }
+      };
+
+      // Convert imported tree format back to internal format with IDs
+      const convertImportedTree = (node) => {
+        if (!node) return null;
+        const id = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        if (node.type === 'leaf') {
+          return { id, type: 'leaf', text: node.text || '', children: [], req_kind: node.req_kind || '', evidence_source: node.evidence_source || '' };
+        } else {
+          return { id, type: node.type, text: '', children: (node.children || []).map(convertImportedTree).filter(Boolean), req_kind: '', evidence_source: '' };
+        }
+      };
+
+      const importData = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const data = JSON.parse(e.target.result);
+
+            // Set document title
+            if (data.document_title) setDocumentTitle(data.document_title);
+
+            // Import sections
+            if (data.sections) {
+              const importedSections = [];
+              ['general', 'supplementary', 'exception'].forEach(type => {
+                (data.sections[type] || []).forEach(s => {
+                  importedSections.push({ id: s.id, text: s.text, type, created_at: new Date().toISOString() });
+                });
+              });
+              setSections(importedSections);
+            }
+
+            // Import logic trees (convert to internal format with IDs)
+            if (data.logic_trees) {
+              const importedTrees = {};
+              Object.keys(data.logic_trees).forEach(sectionId => {
+                importedTrees[sectionId] = convertImportedTree(data.logic_trees[sectionId]);
+              });
+              setSectionTrees(importedTrees);
+            }
+
+            // Import CPT mappings
+            if (data.cpt_mappings) {
+              const importedMappings = [];
+              Object.keys(data.cpt_mappings).forEach(cptCode => {
+                const m = data.cpt_mappings[cptCode];
+                importedMappings.push({
+                  cpt_code: cptCode,
+                  general: m.general || [],
+                  supplementary: m.supplementary || [],
+                  exception: m.exception || [],
+                  code_table_entries: m.code_table_entries || [],
+                  created_at: new Date().toISOString()
+                });
+              });
+              setCptMappings(importedMappings);
+            }
+
+            // Import custom labels
+            if (data.custom_labels) {
+              if (data.custom_labels.req_kinds) setCustomReqKinds(data.custom_labels.req_kinds);
+              if (data.custom_labels.evidence_sources) setCustomEvidenceSources(data.custom_labels.evidence_sources);
+              if (data.custom_labels.lobs) setCustomLOBs(data.custom_labels.lobs);
+            }
+
+            // Import notes/feedback if present (for backward compatibility)
+            if (data.annotator_notes) setAnnotatorNotes(data.annotator_notes);
+            if (data.app_feedback) setAppFeedback(data.app_feedback);
+
+            alert('Import successful! Annotation data has been loaded.');
+          } catch (err) {
+            alert('Import failed: Invalid JSON file. Please check the file format.');
+            console.error('Import error:', err);
+          }
+        };
+        reader.readAsText(file);
+        // Reset file input so the same file can be re-imported
+        event.target.value = '';
       };
 
       return (
@@ -169,6 +287,10 @@
                   <button onClick={() => setShowFeedbackPanel(!showFeedbackPanel)} className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${showFeedbackPanel ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
                     <MessageSquare size={18} /> Notes & Feedback
                   </button>
+                  <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer">
+                    <Upload size={18} /> Import JSON
+                    <input type="file" accept=".json" onChange={importData} className="hidden" />
+                  </label>
                   <button onClick={exportData} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
                     <Download size={18} /> Export JSON
                   </button>
@@ -226,7 +348,7 @@
                     />
                   </div>
                 </div>
-                <p className="text-xs text-purple-600 mt-3">These notes will be included in the exported JSON file.</p>
+                <p className="text-xs text-purple-600 mt-3">These notes will be exported to a separate feedback file (not included in the main annotation file).</p>
               </div>
             </div>
           )}
@@ -241,7 +363,7 @@
           <main className="max-w-7xl mx-auto px-6 pb-24">
             {currentStage === 1 && <Stage1SectionExtraction sections={sections} setSections={setSections} />}
             {currentStage === 2 && <Stage2AtomicBreakdown sections={sections} sectionTrees={sectionTrees} setSectionTrees={setSectionTrees} allReqKinds={allReqKinds} allEvidenceSources={allEvidenceSources} addCustomReqKind={addCustomReqKind} addCustomEvidenceSource={addCustomEvidenceSource} />}
-            {currentStage === 3 && <Stage3CPTMapping sections={sections} sectionTrees={sectionTrees} cptMappings={cptMappings} setCptMappings={setCptMappings} />}
+            {currentStage === 3 && <Stage3CPTMapping sections={sections} sectionTrees={sectionTrees} cptMappings={cptMappings} setCptMappings={setCptMappings} allLOBs={allLOBs} addCustomLOB={addCustomLOB} />}
           </main>
 
           <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-4">
@@ -589,6 +711,62 @@
       );
     }
 
+    // LOB Selector Component with custom LOB support
+    function LOBSelector({ selectedLOBs, allLOBs, onToggle, onAddCustom }) {
+      const [showCustomInput, setShowCustomInput] = useState(false);
+      const [customValue, setCustomValue] = useState('');
+
+      const handleAddCustom = () => {
+        if (customValue.trim()) {
+          onAddCustom(customValue.trim());
+          onToggle(customValue.trim()); // Auto-select the new LOB
+          setCustomValue('');
+          setShowCustomInput(false);
+        }
+      };
+
+      return (
+        <div className="space-y-1">
+          <div className="flex flex-wrap gap-2">
+            {allLOBs.map(lob => (
+              <label key={lob} className="flex items-center gap-1 text-xs bg-gray-50 px-2 py-1 rounded border border-gray-200 hover:bg-gray-100 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedLOBs.includes(lob)}
+                  onChange={() => onToggle(lob)}
+                  className="w-3 h-3 text-blue-600 rounded"
+                />
+                {lob}
+              </label>
+            ))}
+            {!showCustomInput && (
+              <button
+                onClick={() => setShowCustomInput(true)}
+                className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1"
+              >
+                + Add LOB
+              </button>
+            )}
+          </div>
+          {showCustomInput && (
+            <div className="flex gap-1 mt-1">
+              <input
+                type="text"
+                value={customValue}
+                onChange={(e) => setCustomValue(e.target.value)}
+                placeholder="New LOB name..."
+                className="flex-1 px-2 py-1 text-xs border border-blue-300 rounded bg-white"
+                onKeyPress={(e) => e.key === 'Enter' && handleAddCustom()}
+                autoFocus
+              />
+              <button onClick={handleAddCustom} className="px-2 py-1 text-xs bg-blue-600 text-white rounded">Add</button>
+              <button onClick={() => { setShowCustomInput(false); setCustomValue(''); }} className="px-2 py-1 text-xs text-gray-500">×</button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
     // Tree Node Component (recursive)
     function TreeNode({ node, depth, updateNode, deleteNode, addChildToNode, createNode, allReqKinds, allEvidenceSources, addCustomReqKind, addCustomEvidenceSource }) {
       const [isExpanded, setIsExpanded] = useState(true);
@@ -671,7 +849,7 @@
     }
 
     // Stage 3: CPT Code Mapping with Multiple Code Table Entries
-    function Stage3CPTMapping({ sections, sectionTrees, cptMappings, setCptMappings }) {
+    function Stage3CPTMapping({ sections, sectionTrees, cptMappings, setCptMappings, allLOBs, addCustomLOB }) {
       const [currentCPT, setCurrentCPT] = useState('');
       const [currentMappings, setCurrentMappings] = useState({ general: [], supplementary: [], exception: [] });
       const [codeTableEntries, setCodeTableEntries] = useState([]);
@@ -884,14 +1062,12 @@
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-gray-600 mb-1">LOB Applicability</label>
-                              <div className="flex gap-2 mt-1">
-                                {['Medicare', 'Commercial', 'Medicaid'].map(lob => (
-                                  <label key={lob} className="flex items-center gap-1 text-xs">
-                                    <input type="checkbox" checked={entry.lob_applicability.includes(lob)} onChange={() => toggleEntryLOB(entry.id, lob)} className="w-3 h-3 text-blue-600 rounded" />
-                                    {lob.slice(0, 3)}
-                                  </label>
-                                ))}
-                              </div>
+                              <LOBSelector
+                                selectedLOBs={entry.lob_applicability}
+                                allLOBs={allLOBs}
+                                onToggle={(lob) => toggleEntryLOB(entry.id, lob)}
+                                onAddCustom={addCustomLOB}
+                              />
                             </div>
                           </div>
                           <div>
