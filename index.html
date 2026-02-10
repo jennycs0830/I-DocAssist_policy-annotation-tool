@@ -66,13 +66,12 @@
       if (isOperator) {
         return { type: node.type, children: (node.children || []).map(convertTreeToExportFormat).filter(Boolean) };
       } else {
-        return { type: 'leaf', text: node.text || '', req_kind: node.req_kind || '', evidence_source: node.evidence_source || '' };
+        return { type: 'leaf', text: node.text || '', evidence_source: node.evidence_source || '' };
       }
     };
 
-    // Default labels
-    const DEFAULT_REQ_KINDS = ['imaging', 'diagnosis', 'prior_treatment', 'documentation', 'lab', 'other'];
-    const DEFAULT_EVIDENCE_SOURCES = ['clinical_note', 'imaging_report', 'therapy_records', 'lab_result', 'prior_auth_form'];
+    // Fixed labels (controlled vocabulary - do not allow custom additions)
+    const EVIDENCE_SOURCES = ['clinical_note', 'imaging_report', 'therapy_records', 'lab_result', 'prior_auth_form', 'operative_report', 'pathology_report', 'referral_letter', 'other'];
     const DEFAULT_LOBS = ['Medicare', 'Commercial', 'Medicaid'];
 
     // Main App
@@ -83,9 +82,7 @@
       const [sectionTrees, setSectionTrees] = useState({});
       const [cptMappings, setCptMappings] = useState([]);
 
-      // Custom labels state
-      const [customReqKinds, setCustomReqKinds] = useState([]);
-      const [customEvidenceSources, setCustomEvidenceSources] = useState([]);
+      // Custom LOBs state (only LOBs can be customized)
       const [customLOBs, setCustomLOBs] = useState([]);
 
       // Feedback state
@@ -99,21 +96,7 @@
         { id: 3, name: 'CPT Mapping', icon: Link }
       ];
 
-      const allReqKinds = [...DEFAULT_REQ_KINDS, ...customReqKinds];
-      const allEvidenceSources = [...DEFAULT_EVIDENCE_SOURCES, ...customEvidenceSources];
       const allLOBs = [...DEFAULT_LOBS, ...customLOBs];
-
-      const addCustomReqKind = (label) => {
-        if (label && !allReqKinds.includes(label)) {
-          setCustomReqKinds([...customReqKinds, label]);
-        }
-      };
-
-      const addCustomEvidenceSource = (label) => {
-        if (label && !allEvidenceSources.includes(label)) {
-          setCustomEvidenceSources([...customEvidenceSources, label]);
-        }
-      };
 
       const addCustomLOB = (label) => {
         if (label && !allLOBs.includes(label)) {
@@ -157,8 +140,6 @@
           logic_trees: logicTreesExport,
           cpt_mappings: cptMappingsExport,
           custom_labels: {
-            req_kinds: customReqKinds,
-            evidence_sources: customEvidenceSources,
             lobs: customLOBs
           },
           exported_at: timestamp
@@ -200,9 +181,9 @@
         if (!node) return null;
         const id = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         if (node.type === 'leaf') {
-          return { id, type: 'leaf', text: node.text || '', children: [], req_kind: node.req_kind || '', evidence_source: node.evidence_source || '' };
+          return { id, type: 'leaf', text: node.text || '', children: [], evidence_source: node.evidence_source || '' };
         } else {
-          return { id, type: node.type, text: '', children: (node.children || []).map(convertImportedTree).filter(Boolean), req_kind: '', evidence_source: '' };
+          return { id, type: node.type, text: '', children: (node.children || []).map(convertImportedTree).filter(Boolean), evidence_source: '' };
         }
       };
 
@@ -255,10 +236,8 @@
               setCptMappings(importedMappings);
             }
 
-            // Import custom labels
+            // Import custom LOBs
             if (data.custom_labels) {
-              if (data.custom_labels.req_kinds) setCustomReqKinds(data.custom_labels.req_kinds);
-              if (data.custom_labels.evidence_sources) setCustomEvidenceSources(data.custom_labels.evidence_sources);
               if (data.custom_labels.lobs) setCustomLOBs(data.custom_labels.lobs);
             }
 
@@ -362,7 +341,7 @@
 
           <main className="max-w-7xl mx-auto px-6 pb-24">
             {currentStage === 1 && <Stage1SectionExtraction sections={sections} setSections={setSections} />}
-            {currentStage === 2 && <Stage2AtomicBreakdown sections={sections} sectionTrees={sectionTrees} setSectionTrees={setSectionTrees} allReqKinds={allReqKinds} allEvidenceSources={allEvidenceSources} addCustomReqKind={addCustomReqKind} addCustomEvidenceSource={addCustomEvidenceSource} />}
+            {currentStage === 2 && <Stage2AtomicBreakdown sections={sections} sectionTrees={sectionTrees} setSectionTrees={setSectionTrees} />}
             {currentStage === 3 && <Stage3CPTMapping sections={sections} sectionTrees={sectionTrees} cptMappings={cptMappings} setCptMappings={setCptMappings} allLOBs={allLOBs} addCustomLOB={addCustomLOB} />}
           </main>
 
@@ -508,7 +487,7 @@
     }
 
     // Stage 2: Atomic Breakdown with Tree Builder
-    function Stage2AtomicBreakdown({ sections, sectionTrees, setSectionTrees, allReqKinds, allEvidenceSources, addCustomReqKind, addCustomEvidenceSource }) {
+    function Stage2AtomicBreakdown({ sections, sectionTrees, setSectionTrees }) {
       const [selectedSectionId, setSelectedSectionId] = useState(sections.length > 0 ? sections[0].id : null);
       const currentSection = sections.find(s => s.id === selectedSectionId);
       const currentTree = sectionTrees[selectedSectionId] || null;
@@ -528,7 +507,7 @@
                   <li>Identify atomic requirements and copy each one</li>
                   <li>Paste into the tree builder and click "+" to add</li>
                   <li>Use operators to structure the logic (see below)</li>
-                  <li>For each leaf item, set the <code className="bg-gray-200 px-1 rounded">req_kind</code> and <code className="bg-gray-200 px-1 rounded">evidence_source</code></li>
+                  <li>For each leaf item, set the <code className="bg-gray-200 px-1 rounded">evidence_source</code> (document type needed to verify)</li>
                   <li>Repeat for all sections</li>
                 </ol>
               </div>
@@ -543,13 +522,20 @@
                 </ul>
               </div>
               <div>
-                <p className="font-medium mb-1">Leaf Node Fields:</p>
-                <ul className="space-y-1 ml-2">
-                  <li><code className="bg-gray-200 px-1 rounded">req_kind</code>: Type of requirement — <strong>select existing or type a new custom label</strong></li>
-                  <li><code className="bg-gray-200 px-1 rounded">evidence_source</code>: Where to verify — <strong>select existing or type a new custom label</strong></li>
+                <p className="font-medium mb-1">Evidence Source (fixed vocabulary):</p>
+                <p className="ml-2 text-sm">Select the document type needed to verify each requirement. If none fit, select "other" and note details in the feedback panel.</p>
+                <ul className="space-y-1 ml-2 mt-1 text-sm">
+                  <li><code className="bg-gray-200 px-1 rounded">clinical_note</code> — Progress notes, H&P, clinical assessments</li>
+                  <li><code className="bg-gray-200 px-1 rounded">imaging_report</code> — MRI, CT, X-ray reports</li>
+                  <li><code className="bg-gray-200 px-1 rounded">therapy_records</code> — PT/OT notes, conservative treatment records</li>
+                  <li><code className="bg-gray-200 px-1 rounded">lab_result</code> — Lab tests, blood work</li>
+                  <li><code className="bg-gray-200 px-1 rounded">prior_auth_form</code> — Prior authorization documentation</li>
+                  <li><code className="bg-gray-200 px-1 rounded">operative_report</code> — Surgical notes, procedure records</li>
+                  <li><code className="bg-gray-200 px-1 rounded">pathology_report</code> — Biopsy results, pathology findings</li>
+                  <li><code className="bg-gray-200 px-1 rounded">referral_letter</code> — Specialist referrals, consultation requests</li>
                 </ul>
               </div>
-              <p className="text-blue-600 italic">💡 Tip: If none of the existing labels fit, select "+ Add custom..." to create your own!</p>
+              <p className="text-orange-600 italic">⚠️ Important: Do NOT create custom labels. If a category doesn't fit, select "other" and describe the issue in Notes & Feedback.</p>
             </div>
           </InstructionsPanel>
 
@@ -583,7 +569,7 @@
 
             <div className="lg:col-span-5 bg-white rounded-xl border border-gray-200 p-4">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Logic Tree Builder</h2>
-              {selectedSectionId && <TreeBuilder tree={currentTree} setTree={updateTree} allReqKinds={allReqKinds} allEvidenceSources={allEvidenceSources} addCustomReqKind={addCustomReqKind} addCustomEvidenceSource={addCustomEvidenceSource} />}
+              {selectedSectionId && <TreeBuilder tree={currentTree} setTree={updateTree} />}
             </div>
           </div>
         </div>
@@ -591,9 +577,9 @@
     }
 
     // Tree Builder Component
-    function TreeBuilder({ tree, setTree, allReqKinds, allEvidenceSources, addCustomReqKind, addCustomEvidenceSource }) {
+    function TreeBuilder({ tree, setTree }) {
       const [newItemText, setNewItemText] = useState('');
-      const createNode = (type, children = [], text = '') => ({ id: `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, type, text, children, req_kind: '', evidence_source: '' });
+      const createNode = (type, children = [], text = '') => ({ id: `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, type, text, children, evidence_source: '' });
       const operators = ['ALL', 'ANY', 'NOT', 'IF', 'UNLESS'];
 
       const initializeTree = () => setTree(createNode('ALL', []));
@@ -656,58 +642,9 @@
                 <p className="text-sm">Add atomic items or initialize with an operator.</p>
                 <button onClick={initializeTree} className="mt-4 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200">Initialize with ALL</button>
               </div>
-            ) : <TreeNode node={tree} depth={0} updateNode={updateNode} deleteNode={deleteNode} addChildToNode={addChildToNode} createNode={createNode} allReqKinds={allReqKinds} allEvidenceSources={allEvidenceSources} addCustomReqKind={addCustomReqKind} addCustomEvidenceSource={addCustomEvidenceSource} />}
+            ) : <TreeNode node={tree} depth={0} updateNode={updateNode} deleteNode={deleteNode} addChildToNode={addChildToNode} createNode={createNode} />}
           </div>
         </div>
-      );
-    }
-
-    // Custom Label Select Component
-    function CustomLabelSelect({ value, onChange, options, onAddCustom, placeholder }) {
-      const [showCustomInput, setShowCustomInput] = useState(false);
-      const [customValue, setCustomValue] = useState('');
-
-      const handleSelectChange = (e) => {
-        if (e.target.value === '__add_custom__') {
-          setShowCustomInput(true);
-        } else {
-          onChange(e.target.value);
-        }
-      };
-
-      const handleAddCustom = () => {
-        if (customValue.trim()) {
-          onAddCustom(customValue.trim());
-          onChange(customValue.trim());
-          setCustomValue('');
-          setShowCustomInput(false);
-        }
-      };
-
-      if (showCustomInput) {
-        return (
-          <div className="flex gap-1">
-            <input
-              type="text"
-              value={customValue}
-              onChange={(e) => setCustomValue(e.target.value)}
-              placeholder="New label..."
-              className="flex-1 px-2 py-1 text-xs border border-blue-300 rounded bg-white"
-              onKeyPress={(e) => e.key === 'Enter' && handleAddCustom()}
-              autoFocus
-            />
-            <button onClick={handleAddCustom} className="px-2 py-1 text-xs bg-blue-600 text-white rounded">Add</button>
-            <button onClick={() => { setShowCustomInput(false); setCustomValue(''); }} className="px-2 py-1 text-xs text-gray-500">×</button>
-          </div>
-        );
-      }
-
-      return (
-        <select value={value || ''} onChange={handleSelectChange} className="text-xs px-2 py-1 border border-gray-200 rounded bg-white">
-          <option value="">{placeholder}</option>
-          {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-          <option value="__add_custom__">+ Add custom...</option>
-        </select>
       );
     }
 
@@ -768,7 +705,7 @@
     }
 
     // Tree Node Component (recursive)
-    function TreeNode({ node, depth, updateNode, deleteNode, addChildToNode, createNode, allReqKinds, allEvidenceSources, addCustomReqKind, addCustomEvidenceSource }) {
+    function TreeNode({ node, depth, updateNode, deleteNode, addChildToNode, createNode }) {
       const [isExpanded, setIsExpanded] = useState(true);
       const [isEditing, setIsEditing] = useState(false);
       const [editText, setEditText] = useState(node.text);
@@ -804,23 +741,18 @@
                 </div>
               ) : <p className="text-sm cursor-pointer hover:bg-black/5 rounded p-1 -m-1" onClick={() => setIsEditing(true)}>{node.text || <em className="text-gray-400">Click to edit</em>}</p>}
 
-              {/* Leaf node metadata with custom label support */}
+              {/* Leaf node - evidence source only (fixed vocabulary) */}
               {!isOperator && (
-                <div className="flex gap-2 mt-2 flex-wrap">
-                  <CustomLabelSelect
-                    value={node.req_kind}
-                    onChange={(val) => updateNode(node.id, { req_kind: val })}
-                    options={allReqKinds}
-                    onAddCustom={addCustomReqKind}
-                    placeholder="req_kind..."
-                  />
-                  <CustomLabelSelect
-                    value={node.evidence_source}
-                    onChange={(val) => updateNode(node.id, { evidence_source: val })}
-                    options={allEvidenceSources}
-                    onAddCustom={addCustomEvidenceSource}
-                    placeholder="evidence_source..."
-                  />
+                <div className="flex gap-2 mt-2 items-center">
+                  <span className="text-xs text-gray-500">Evidence:</span>
+                  <select
+                    value={node.evidence_source || ''}
+                    onChange={(e) => updateNode(node.id, { evidence_source: e.target.value })}
+                    className="text-xs px-2 py-1 border border-gray-200 rounded bg-white"
+                  >
+                    <option value="">Select source...</option>
+                    {EVIDENCE_SOURCES.map(src => <option key={src} value={src}>{src}</option>)}
+                  </select>
                 </div>
               )}
             </div>
@@ -843,7 +775,7 @@
             </div>
           )}
 
-          {isExpanded && node.children?.map(child => <TreeNode key={child.id} node={child} depth={depth + 1} updateNode={updateNode} deleteNode={deleteNode} addChildToNode={addChildToNode} createNode={createNode} allReqKinds={allReqKinds} allEvidenceSources={allEvidenceSources} addCustomReqKind={addCustomReqKind} addCustomEvidenceSource={addCustomEvidenceSource} />)}
+          {isExpanded && node.children?.map(child => <TreeNode key={child.id} node={child} depth={depth + 1} updateNode={updateNode} deleteNode={deleteNode} addChildToNode={addChildToNode} createNode={createNode} />)}
         </div>
       );
     }
@@ -891,11 +823,7 @@
         e.preventDefault();
         const sectionId = e.dataTransfer.getData('sectionId');
         if (!sectionId || currentMappings[targetType].includes(sectionId)) return;
-        if (targetType === 'general') {
-          setCurrentMappings({ ...currentMappings, general: [sectionId] });
-        } else {
-          setCurrentMappings({ ...currentMappings, [targetType]: [...currentMappings[targetType], sectionId] });
-        }
+        setCurrentMappings({ ...currentMappings, [targetType]: [...currentMappings[targetType], sectionId] });
       };
 
       const removeMapping = (targetType, sectionId) => {
@@ -1088,7 +1016,7 @@
               <div className="space-y-3">
                 {['general', 'supplementary', 'exception'].map(type => (
                   <div key={type}>
-                    <label className="block text-sm font-medium text-gray-700 mb-2 capitalize">{type} {type === 'general' ? '(exactly 1)' : '(0+)'}</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2 capitalize">{type} (0+)</label>
                     <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, type)} className={`min-h-[50px] border-2 border-dashed rounded-lg p-2 ${typeColors[type]}`}>
                       {currentMappings[type].length > 0 ? (
                         <div className="space-y-1">
