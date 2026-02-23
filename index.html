@@ -64,7 +64,7 @@
       if (isOperator) {
         return { type: node.type, children: (node.children || []).map(convertTreeToExportFormat).filter(Boolean) };
       } else {
-        return { type: 'leaf', text: node.text || '', evidence_source: node.evidence_source || '', time_sensitive: node.time_sensitive || false };
+        return { type: 'leaf', text: node.text || '', evidence_sources: Array.isArray(node.evidence_sources) ? node.evidence_sources : (node.evidence_source ? [node.evidence_source] : []), time_sensitive: node.time_sensitive || false };
       }
     };
 
@@ -160,9 +160,9 @@
         if (!node) return null;
         const id = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         if (node.type === 'leaf') {
-          return { id, type: 'leaf', text: node.text || '', children: [], evidence_source: node.evidence_source || '', time_sensitive: node.time_sensitive || false };
+          return { id, type: 'leaf', text: node.text || '', children: [], evidence_sources: Array.isArray(node.evidence_sources) ? node.evidence_sources : (node.evidence_source ? [node.evidence_source] : []), time_sensitive: node.time_sensitive || false };
         } else {
-          return { id, type: node.type, text: '', children: (node.children || []).map(convertImportedTree).filter(Boolean), evidence_source: '', time_sensitive: false };
+          return { id, type: node.type, text: '', children: (node.children || []).map(convertImportedTree).filter(Boolean), evidence_sources: [], time_sensitive: false };
         }
       };
 
@@ -455,7 +455,7 @@
                   <li>Identify atomic requirements and copy each one</li>
                   <li>Paste into the tree builder and click "+" to add</li>
                   <li>Use operators to structure the logic (see below)</li>
-                  <li>For each leaf item, set the <code className="bg-gray-200 px-1 rounded">evidence_source</code> (document type needed to verify)</li>
+                  <li>For each leaf item, check all applicable <code className="bg-gray-200 px-1 rounded">evidence_sources</code> (one or more document types needed to verify)</li>
                   <li>Flag <span className="inline-block px-2 py-0.5 bg-amber-100 text-amber-800 rounded text-xs font-medium">⏱ Time Sensitive</span> for requirements involving a specific time duration or recency constraint (e.g., "6 weeks of therapy", "within 6 months")</li>
                   <li>Repeat for all sections</li>
                 </ol>
@@ -471,8 +471,8 @@
                 </ul>
               </div>
               <div>
-                <p className="font-medium mb-1">Evidence Source (fixed vocabulary):</p>
-                <p className="ml-2 text-sm">Select the document type needed to verify each requirement. If none fit, select "other" and note details in the feedback panel.</p>
+                <p className="font-medium mb-1">Evidence Sources (fixed vocabulary, multi-select):</p>
+                <p className="ml-2 text-sm">Check all document types needed to verify each requirement — you may select more than one. If none fit, check "other" and note details in the feedback panel.</p>
                 <ul className="space-y-1 ml-2 mt-1 text-sm">
                   <li><code className="bg-gray-200 px-1 rounded">clinical_note</code> — Progress notes, H&P, clinical assessments</li>
                   <li><code className="bg-gray-200 px-1 rounded">imaging_report</code> — MRI, CT, X-ray reports</li>
@@ -527,7 +527,7 @@
     // Tree Builder Component
     function TreeBuilder({ tree, setTree }) {
       const [newItemText, setNewItemText] = useState('');
-      const createNode = (type, children = [], text = '') => ({ id: `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, type, text, children, evidence_source: '', time_sensitive: false });
+      const createNode = (type, children = [], text = '') => ({ id: `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, type, text, children, evidence_sources: [], time_sensitive: false });
       const operators = ['ALL', 'ANY', 'NOT', 'IF', 'UNLESS'];
 
       const initializeTree = () => setTree(createNode('ALL', []));
@@ -575,11 +575,11 @@
       const convertNodeToOperator = (nodeId, operatorType) => {
         const convertRec = (node) => {
           if (node.id === nodeId) {
-            // Create a new leaf with the original text and evidence_source
+            // Create a new leaf with the original text and evidence_sources
             const childLeaf = createNode('leaf', [], node.text);
-            childLeaf.evidence_source = node.evidence_source || '';
+            childLeaf.evidence_sources = node.evidence_sources || [];
             // Return new operator with the leaf as first child
-            return { ...node, type: operatorType, text: '', children: [childLeaf], evidence_source: '' };
+            return { ...node, type: operatorType, text: '', children: [childLeaf], evidence_sources: [] };
           }
           if (node.children) return { ...node, children: node.children.map(convertRec) };
           return node;
@@ -653,16 +653,28 @@
               {/* Leaf node - evidence source, time sensitive flag, and convert to operator */}
               {!isOperator && (
                 <div className="mt-2 space-y-2">
-                  <div className="flex gap-2 items-center flex-wrap">
-                    <span className="text-xs text-gray-500">Evidence:</span>
-                    <select
-                      value={node.evidence_source || ''}
-                      onChange={(e) => updateNode(node.id, { evidence_source: e.target.value })}
-                      className="text-xs px-2 py-1 border border-gray-200 rounded bg-white"
-                    >
-                      <option value="">Select source...</option>
-                      {EVIDENCE_SOURCES.map(src => <option key={src} value={src}>{src}</option>)}
-                    </select>
+                  <div className="flex gap-2 items-start flex-wrap">
+                    <span className="text-xs text-gray-500 mt-0.5">Evidence:</span>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1">
+                      {EVIDENCE_SOURCES.map(src => {
+                        const checked = (node.evidence_sources || []).includes(src);
+                        return (
+                          <label key={src} className="flex items-center gap-1 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => {
+                                const current = node.evidence_sources || [];
+                                const updated = checked ? current.filter(s => s !== src) : [...current, src];
+                                updateNode(node.id, { evidence_sources: updated });
+                              }}
+                              className="accent-indigo-600"
+                            />
+                            <span className="text-xs text-gray-600">{src}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                     <span className="text-gray-300">|</span>
                     <div className="relative">
                       <button
