@@ -9,1434 +9,1048 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
-    .line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
-    .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    .line-clamp-4 { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+    .line-clamp-2 { display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden }
+    .line-clamp-4 { display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden }
+    /* Tree text: no line-clamp, mono, allow wrap */
+    .tree-block { font-family:'Courier New',monospace; font-size:12.5px; line-height:1.65;
+                  white-space:pre-wrap; word-break:break-word; }
+    .tree-matched  { background:#f0fdf4; color:#166534; border-left:3px solid #4ade80; }
+    .tree-missed   { background:#fff1f2; color:#9f1239; border-left:3px solid #f87171; }
+    .tree-extra    { background:#fff7ed; color:#9a3412; border-left:3px solid #fb923c; }
+    .tree-operator { background:#eff6ff; color:#1e40af; font-weight:600; }
+    .tree-meta     { color:#6b7280; font-style:italic; font-size:11px; }
+    .tree-default  { color:#374151; }
+    /* Diff spans */
+    .diff-equal  { color:#374151; }
+    .diff-insert { background:#fef9c3; color:#854d0e; text-decoration:underline; }
+    .diff-delete { background:#fee2e2; color:#991b1b; text-decoration:line-through; }
   </style>
 </head>
 <body>
   <div id="root"></div>
   <script type="text/babel">
-    const { useState } = React;
+    const { useState, useMemo } = React;
 
-    // Icons
-    const ChevronRight = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m9 18 6-6-6-6"/></svg>);
-    const ChevronDown = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m6 9 6 6 6-6"/></svg>);
-    const Plus = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="M12 5v14"/></svg>);
-    const Trash2 = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>);
-    const GripVertical = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>);
-    const Download = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>);
-    const ArrowLeft = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>);
-    const ArrowRight = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>);
-    const FileText = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></svg>);
-    const Layers = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>);
-    const GitBranch = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>);
-    const Link = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>);
-    const Info = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>);
-    const MessageSquare = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>);
-    const Upload = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>);
+    /* ── ICONS ── */
+    const ChevronR  = ({s=20,c=""})=>(<svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={c}><path d="m9 18 6-6-6-6"/></svg>);
+    const ChevronD  = ({s=20,c=""})=>(<svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={c}><path d="m6 9 6 6 6-6"/></svg>);
+    const PlusI     = ({s=20,c=""})=>(<svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={c}><path d="M5 12h14"/><path d="M12 5v14"/></svg>);
+    const TrashI    = ({s=20,c=""})=>(<svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={c}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>);
+    const GripI     = ({s=20,c=""})=>(<svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={c}><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>);
+    const DlI       = ({s=20,c=""})=>(<svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={c}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>);
+    const ArrL      = ({s=20,c=""})=>(<svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={c}><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>);
+    const ArrR      = ({s=20,c=""})=>(<svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={c}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>);
+    const FileI     = ({s=20,c=""})=>(<svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={c}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></svg>);
+    const LayersI   = ({s=20,c=""})=>(<svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={c}><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>);
+    const GitI      = ({s=20,c=""})=>(<svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={c}><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>);
+    const LinkI     = ({s=20,c=""})=>(<svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={c}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>);
+    const InfoI     = ({s=20,c=""})=>(<svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={c}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>);
+    const MsgI      = ({s=20,c=""})=>(<svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={c}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>);
+    const UpI       = ({s=20,c=""})=>(<svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={c}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>);
+    const BarI      = ({s=20,c=""})=>(<svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={c}><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/></svg>);
 
-    // Instructions Panel
-    function InstructionsPanel({ title, children, defaultOpen = true }) {
-      const [isOpen, setIsOpen] = useState(defaultOpen);
-      return (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl mb-6">
-          <button onClick={() => setIsOpen(!isOpen)} className="w-full flex items-center justify-between p-4 text-left">
-            <div className="flex items-center gap-2">
-              <Info size={20} className="text-blue-600" />
-              <span className="font-semibold text-blue-900">{title}</span>
-            </div>
-            {isOpen ? <ChevronDown size={20} className="text-blue-600" /> : <ChevronRight size={20} className="text-blue-600" />}
-          </button>
-          {isOpen && <div className="px-4 pb-4 text-sm text-blue-800">{children}</div>}
-        </div>
-      );
+    /* ── CONSTANTS ── */
+    const EVIDENCE_SOURCES=['clinical_note','imaging_report','therapy_records','lab_result','prior_auth_form','operative_report','pathology_report','referral_letter','other'];
+    const DEFAULT_LOBS=['Medicare','Commercial','Medicaid'];
+
+    /* ── HELPERS ── */
+    const genId=(type,existing)=>{const p=type==='general'?'g':type==='supplementary'?'s':'e';return`${p}${String(existing.filter(s=>s.type===type).length+1).padStart(3,'0')}`;};
+    const toExport=n=>{if(!n)return null;if(['ALL','ANY','NOT','IF','UNLESS'].includes(n.type))return{type:n.type,children:(n.children||[]).map(toExport).filter(Boolean)};return{type:'leaf',text:n.text||'',evidence_source:n.evidence_source||''};};
+    const pct=v=>v!=null?(v*100).toFixed(1)+'%':'N/A';
+    const sColor=v=>{if(v==null)return'text-gray-400';if(v>=0.8)return'text-green-700';if(v>=0.5)return'text-yellow-700';return'text-red-600';};
+    const sBg=v=>{if(v==null)return'bg-gray-100';if(v>=0.8)return'bg-green-100';if(v>=0.5)return'bg-yellow-100';return'bg-red-100';};
+
+    /* ── INSTRUCTIONS PANEL ── */
+    function InstrPanel({title,children,open:initOpen=true}){
+      const [open,setOpen]=useState(initOpen);
+      return(<div className="bg-blue-50 border border-blue-200 rounded-xl mb-6">
+        <button onClick={()=>setOpen(!open)} className="w-full flex items-center justify-between p-4 text-left">
+          <div className="flex items-center gap-2"><InfoI s={18} c="text-blue-600"/><span className="font-semibold text-blue-900 text-sm">{title}</span></div>
+          {open?<ChevronD s={18} c="text-blue-600"/>:<ChevronR s={18} c="text-blue-600"/>}
+        </button>
+        {open&&<div className="px-4 pb-4 text-sm text-blue-800">{children}</div>}
+      </div>);
     }
 
-    // Helpers
-    const generateSectionId = (existingSections) => {
-      return `sec${String(existingSections.length + 1).padStart(3, '0')}`;
-    };
+    /* ── METRIC CARD ── */
+    function MCard({label,value,sub,raw}){
+      const disp=raw!=null?raw:pct(value);
+      return(<div className={`rounded-xl p-4 border border-gray-100 ${sBg(value)}`}>
+        <div className={`text-2xl font-bold ${sColor(value)}`}>{disp}</div>
+        <div className="text-sm font-medium text-gray-700 mt-1">{label}</div>
+        {sub&&<div className="text-xs text-gray-500 mt-0.5">{sub}</div>}
+      </div>);
+    }
 
-    const convertTreeToExportFormat = (node) => {
-      if (!node) return null;
-      const isOperator = ['ALL', 'ANY', 'NOT', 'IF', 'UNLESS'].includes(node.type);
-      if (isOperator) {
-        return { type: node.type, children: (node.children || []).map(convertTreeToExportFormat).filter(Boolean) };
-      } else {
-        return { type: 'leaf', text: node.text || '', evidence_sources: Array.isArray(node.evidence_sources) ? node.evidence_sources : (node.evidence_source ? [node.evidence_source] : []), time_sensitive: node.time_sensitive || false };
+    /* ── TREE LINE CLASSIFIER ── */
+    function classLine(line){
+      if(/\[✓/.test(line))return'tree-matched';
+      if(/\[✗ MISSED\]/.test(line))return'tree-missed';
+      if(/\[\+ EXTRA\]/.test(line))return'tree-extra';
+      if(/\[(ALL|ANY|NOT|IF|UNLESS)\]/.test(line))return'tree-operator';
+      if(/·\s*ts:/.test(line))return'tree-meta';
+      return'tree-default';
+    }
+
+    /* ── TREE LEAF PARSER ── */
+    /* Extracts structured leaves from the ASCII tree string.
+       Each leaf line is followed by a "· ts:yes/no  ev:[...]" metadata line.
+       Returns array of {status:'matched'|'missed'|'extra', score, text, ts, ev:[]} */
+    function parseTreeLeaves(treeStr){
+      if(!treeStr)return[];
+      const rows=[];
+      let last=null;
+      for(const line of treeStr.split('\n')){
+        if(/·\s*ts:/.test(line)){
+          if(last){
+            const tsM=line.match(/ts:(yes|no)/i);
+            const evM=line.match(/ev:\[([^\]]*)\]/);
+            last.ts=tsM?(tsM[1].toLowerCase()==='yes'):null;
+            last.ev=evM?evM[1].split(',').map(s=>s.trim()).filter(Boolean):[];
+          }
+          continue;
+        }
+        const mM=line.match(/\[✓\s*([\d.]+)\]\s+(.*)/);
+        const missM=line.match(/\[✗ MISSED\]\s+(.*)/);
+        const extM=line.match(/\[\+\s*EXTRA\]\s+(.*)/);
+        if(mM){last={status:'matched',score:parseFloat(mM[1]),text:mM[2].trim(),ts:null,ev:[]};rows.push(last);}
+        else if(missM){last={status:'missed',text:missM[1].trim(),ts:null,ev:[]};rows.push(last);}
+        else if(extM){last={status:'extra',text:extM[1].trim(),ts:null,ev:[]};rows.push(last);}
+        // operator/structure lines don't reset last so the next meta line can still attach
       }
-    };
+      return rows;
+    }
+    function evSetsEqual(a,b){
+      if(!a||!b)return a===b;
+      if(a.length!==b.length)return false;
+      const sa=new Set(a);
+      return b.every(x=>sa.has(x));
+    }
+    /* Build comparison rows from ref+pred tree strings.
+       Returns [{type, refText, predText, refTs, predTs, tsMatch, refEv, predEv, evMatch, score}] */
+    function buildLeafRows(refStr,predStr){
+      const refAll=parseTreeLeaves(refStr);
+      const predAll=parseTreeLeaves(predStr);
+      const refMatched=refAll.filter(l=>l.status==='matched');
+      const predMatched=predAll.filter(l=>l.status==='matched');
+      const rows=[];
+      const n=Math.min(refMatched.length,predMatched.length);
+      for(let i=0;i<n;i++){
+        const r=refMatched[i],p=predMatched[i];
+        rows.push({type:'matched',score:r.score,
+          refText:r.text,predText:p.text,
+          refTs:r.ts,predTs:p.ts,tsMatch:r.ts===p.ts,
+          refEv:r.ev,predEv:p.ev,evMatch:evSetsEqual(r.ev,p.ev)});
+      }
+      for(const l of refAll.filter(x=>x.status==='missed'))
+        rows.push({type:'missed',refText:l.text,predText:null,refTs:l.ts,predTs:null,refEv:l.ev,predEv:null,tsMatch:false,evMatch:false});
+      for(const l of predAll.filter(x=>x.status==='extra'))
+        rows.push({type:'extra',refText:null,predText:l.text,refTs:null,predTs:l.ts,refEv:null,predEv:l.ev,tsMatch:false,evMatch:false});
+      return rows;
+    }
+    function TreeTextPanel({treeStr,label,labelColor}){
+      if(!treeStr)return<div className="text-gray-400 italic text-xs py-6 text-center">No tree data</div>;
+      const lines=treeStr.split('\n');
+      return(<div className="rounded-lg border border-gray-200 overflow-hidden">
+        <div className={`px-3 py-1.5 text-xs font-semibold border-b border-gray-200 ${labelColor}`}>{label}</div>
+        <div className="p-3 overflow-x-auto bg-white space-y-0.5">
+          {lines.map((line,i)=>(
+            <div key={i} className={`tree-block px-2 py-0.5 rounded ${classLine(line)}`}>{line||'\u00A0'}</div>
+          ))}
+        </div>
+      </div>);
+    }
 
-    // Fixed labels (controlled vocabulary - do not allow custom additions)
-    const EVIDENCE_SOURCES = ['clinical_note', 'imaging_report', 'therapy_records', 'lab_result', 'prior_auth_form', 'operative_report', 'pathology_report', 'referral_letter', 'other'];
+    /* ── DIFF SPAN RENDERER ── */
+    function DiffView({spans}){
+      if(!spans||spans.length===0)return null;
+      return(<div className="text-sm leading-relaxed p-3 bg-gray-50 rounded-lg border border-gray-200">
+        {spans.map((sp,i)=>{
+          if(sp.op==='equal') return<span key={i} className="diff-equal">{sp.ref}</span>;
+          return(<span key={i}>
+            {sp.ref&&<span className="diff-delete">{sp.ref}</span>}
+            {sp.pred&&<span className="diff-insert"> {sp.pred}</span>}
+          </span>);
+        })}
+      </div>);
+    }
 
-    // Main App
-    function AnnotationTool() {
-      const [appMode, setAppMode] = useState('annotation'); // 'annotation' | 'evaluation'
-      const [currentStage, setCurrentStage] = useState(1);
-      const [documentTitle, setDocumentTitle] = useState('');
-      const [sections, setSections] = useState([]);
-      const [sectionTrees, setSectionTrees] = useState({});
-      const [cptMappings, setCptMappings] = useState([]);
+    /* ═══════════════════════════════════════════════
+       REPORT VIEWER (separate full-screen page)
+    ═══════════════════════════════════════════════ */
+    function ReportViewer({reportData, onBack}){
+      const [activeTab,setActiveTab]=useState('s1');
+      const [expandedSec,setExpandedSec]=useState(null);
+      const [filterLow,setFilterLow]=useState(false);
+      const [annotData,setAnnotData]=useState(null);
 
-      // Feedback state
-      const [annotatorNotes, setAnnotatorNotes] = useState('');
-      const [appFeedback, setAppFeedback] = useState('');
-      const [showFeedbackPanel, setShowFeedbackPanel] = useState(false);
+      /* load annotation JSON to get full leaf text + evidence/time-sensitive */
+      const loadAnnot=e=>{
+        const f=e.target.files[0];if(!f)return;
+        const r=new FileReader();
+        r.onload=ev=>{try{const d=JSON.parse(ev.target.result);setAnnotData(d);}catch(err){alert('Annotation load failed: '+err.message);}};
+        r.readAsText(f);e.target.value='';
+      };
 
-      const stages = [
-        { id: 1, name: 'Section Extraction', icon: FileText },
-        { id: 2, name: 'Atomic Breakdown', icon: GitBranch },
-        { id: 3, name: 'CPT Mapping', icon: Link }
+      /* Build a prefix→fullText lookup from annotation JSON.
+         Truncated tree text ends with "…" — match it against full leaf text from annotation. */
+      const annotTextLookup=useMemo(()=>{
+        if(!annotData?.logic_trees)return{};
+        const lookup={};// key: secId+'::'+prefix30 → fullText
+        const collectLeaves=(node,secId)=>{
+          if(!node)return;
+          if(node.type==='leaf'&&node.text){
+            const full=node.text.trim();
+            // store by first 30 chars as key (enough to uniquely match)
+            lookup[secId+'::'+full.slice(0,35)]=full;
+          }
+          (node.children||[]).forEach(c=>collectLeaves(c,secId));
+        };
+        Object.entries(annotData.logic_trees).forEach(([secId,tree])=>collectLeaves(tree,secId));
+        return lookup;
+      },[annotData]);
+
+      /* Resolve possibly-truncated tree leaf text to full text using annotation lookup */
+      const resolveText=(secId,truncated)=>{
+        if(!truncated)return truncated;
+        const clean=truncated.replace(/…$/, '').trim();
+        if(!truncated.endsWith('…'))return truncated;// not truncated
+        // find matching key
+        for(const [k,v] of Object.entries(annotTextLookup)){
+          if(k.startsWith(secId+'::')&&v.startsWith(clean))return v;
+        }
+        return truncated;// fallback: show as-is
+      };
+
+      /* build per-section leaf map for legacy RefLeafTable (when matched_leaves exists) */
+      const annotLeafMap=useMemo(()=>{
+        if(!annotData?.logic_trees)return{};
+        const map={};
+        const collectLeaves=(node,arr)=>{
+          if(!node)return;
+          if(node.type==='leaf'){arr.push({text:node.text||'',evidence_source:node.evidence_sources||node.evidence_source||'',time_sensitive:node.time_sensitive||false});}
+          (node.children||[]).forEach(c=>collectLeaves(c,arr));
+        };
+        Object.entries(annotData.logic_trees).forEach(([secId,tree])=>{
+          const leaves=[];collectLeaves(tree,leaves);map[secId]=leaves;
+        });
+        return map;
+      },[annotData]);
+
+      const s1=reportData.stage1||{};
+      const s2=reportData.stage2||{};
+      const s3=reportData.stage3||{};
+      const iaa=reportData.inter_annotator_agreement||{};
+      const perSec=s2.per_section||{};
+      const errSum=reportData.error_summary||{};
+
+      /* build section text lookup from stage1 */
+      const secTextMap=useMemo(()=>{
+        const m={};
+        (s1.matches||[]).forEach(match=>{
+          if(match.ref_id)  m[match.ref_id]  ={ref:match.ref_text,pred:match.pred_text,predId:match.pred_id,sim:match.similarity,isSubset:match.is_subset,subsetDir:match.subset_direction,diffSpans:match.diff_spans};
+          if(match.pred_id) m['pred_'+match.pred_id]={text:match.pred_text};
+        });
+        (s1.unmatched_ref||[]).forEach(s=>{m[s.id]={ref:s.text,pred:null};});
+        (s1.unmatched_pred||[]).forEach(s=>{m['pred_'+s.id]={text:s.text};});
+        return m;
+      },[s1]);
+
+      /* categorise stage1 matches */
+      const exactMatches=(s1.matches||[]).filter(m=>!m.is_subset);
+      const subsetMatches=(s1.matches||[]).filter(m=>m.is_subset);
+      const missedSecs=s1.unmatched_ref||[];
+      const spuriousSecs=s1.unmatched_pred||[];
+
+      const secIds=Object.keys(perSec);
+      const shownIds=filterLow?secIds.filter(id=>(perSec[id].leaf_f1||0)<0.8):secIds;
+
+      const tabs=[
+        {id:'s1',label:'Stage 1 — Sections',icon:FileI},
+        {id:'s2',label:'Stage 2 — Trees',icon:GitI},
+        {id:'s3',label:'Stage 3 — CPT',icon:LinkI},
+        {id:'iaa',label:'Agreement',icon:LayersI},
       ];
 
-      const canProceed = () => {
-        if (currentStage === 1) return sections.length > 0 && documentTitle.trim() !== '';
-        if (currentStage === 2) return Object.keys(sectionTrees).length > 0;
-        return true;
-      };
-
-      const exportData = () => {
-        const sectionsExport = sections.map(s => ({ id: s.id, text: s.text }));
-
-        const logicTreesExport = {};
-        Object.keys(sectionTrees).forEach(sectionId => {
-          const tree = sectionTrees[sectionId];
-          if (tree) logicTreesExport[sectionId] = convertTreeToExportFormat(tree);
-        });
-
-        const cptMappingsExport = {};
-        cptMappings.forEach(mapping => {
-          cptMappingsExport[mapping.cpt_code] = {
-            sections: mapping.sections || [],
-            is_addon: mapping.is_addon || false
-          };
-        });
-
-        const timestamp = new Date().toISOString();
-        const filePrefix = documentTitle.replace(/\s+/g, '_') || 'annotation';
-
-        // Main annotation export (without notes/feedback)
-        const mainExport = {
-          document_title: documentTitle,
-          sections: sectionsExport,
-          logic_trees: logicTreesExport,
-          cpt_mappings: cptMappingsExport,
-          exported_at: timestamp
-        };
-
-        // Notes/feedback export (separate file)
-        const feedbackExport = {
-          document_title: documentTitle,
-          annotator_notes: annotatorNotes,
-          app_feedback: appFeedback,
-          exported_at: timestamp
-        };
-
-        // Download main annotation file
-        const mainBlob = new Blob([JSON.stringify(mainExport, null, 2)], { type: 'application/json' });
-        const mainUrl = URL.createObjectURL(mainBlob);
-        const mainLink = document.createElement('a');
-        mainLink.href = mainUrl;
-        mainLink.download = `${filePrefix}_annotation.json`;
-        mainLink.click();
-        URL.revokeObjectURL(mainUrl);
-
-        // Download feedback file only if there's content
-        if (annotatorNotes.trim() || appFeedback.trim()) {
-          setTimeout(() => {
-            const feedbackBlob = new Blob([JSON.stringify(feedbackExport, null, 2)], { type: 'application/json' });
-            const feedbackUrl = URL.createObjectURL(feedbackBlob);
-            const feedbackLink = document.createElement('a');
-            feedbackLink.href = feedbackUrl;
-            feedbackLink.download = `${filePrefix}_feedback.json`;
-            feedbackLink.click();
-            URL.revokeObjectURL(feedbackUrl);
-          }, 500);
-        }
-      };
-
-      // Convert imported tree format back to internal format with IDs
-      const convertImportedTree = (node) => {
-        if (!node) return null;
-        const id = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        if (node.type === 'leaf') {
-          return { id, type: 'leaf', text: node.text || '', children: [], evidence_sources: Array.isArray(node.evidence_sources) ? node.evidence_sources : (node.evidence_source ? [node.evidence_source] : []), time_sensitive: node.time_sensitive || false };
-        } else {
-          return { id, type: node.type, text: '', children: (node.children || []).map(convertImportedTree).filter(Boolean), evidence_sources: [], time_sensitive: false };
-        }
-      };
-
-      const importData = (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          try {
-            const data = JSON.parse(e.target.result);
-
-            // Set document title
-            if (data.document_title) setDocumentTitle(data.document_title);
-
-            // Import sections (flat array)
-            if (data.sections) {
-              const importedSections = (Array.isArray(data.sections) ? data.sections : []).map(s => ({
-                id: s.id, text: s.text, created_at: new Date().toISOString()
-              }));
-              setSections(importedSections);
-            }
-
-            // Import logic trees (convert to internal format with IDs)
-            if (data.logic_trees) {
-              const importedTrees = {};
-              Object.keys(data.logic_trees).forEach(sectionId => {
-                importedTrees[sectionId] = convertImportedTree(data.logic_trees[sectionId]);
-              });
-              setSectionTrees(importedTrees);
-            }
-
-            // Import CPT mappings
-            if (data.cpt_mappings) {
-              const importedMappings = [];
-              Object.keys(data.cpt_mappings).forEach(cptCode => {
-                const m = data.cpt_mappings[cptCode];
-                importedMappings.push({
-                  cpt_code: cptCode,
-                  sections: m.sections || [],
-                  is_addon: m.is_addon || false,
-                  created_at: new Date().toISOString()
-                });
-              });
-              setCptMappings(importedMappings);
-            }
-
-            // Import notes/feedback if present (for backward compatibility)
-            if (data.annotator_notes) setAnnotatorNotes(data.annotator_notes);
-            if (data.app_feedback) setAppFeedback(data.app_feedback);
-
-            alert('Import successful! Annotation data has been loaded.');
-          } catch (err) {
-            alert('Import failed: Invalid JSON file. Please check the file format.');
-            console.error('Import error:', err);
-          }
-        };
-        reader.readAsText(file);
-        // Reset file input so the same file can be re-imported
-        event.target.value = '';
-      };
-
-      return (
+      return(
         <div className="min-h-screen bg-gray-50">
-          <header className="bg-white border-b border-gray-200 px-6 py-4">
-            <div className="max-w-7xl mx-auto">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <h1 className="text-2xl font-bold text-gray-900">Policy Annotation Tool</h1>
-                  {/* Mode toggle */}
-                  <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
-                    <button onClick={() => setAppMode('annotation')}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 transition-colors ${appMode === 'annotation' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
-                      <FileText size={14} /> Annotate
-                    </button>
-                    <button onClick={() => setAppMode('evaluation')}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 transition-colors ${appMode === 'evaluation' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
-                      📊 Evaluation Report
-                    </button>
-                  </div>
+          {/* Report header */}
+          <header className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-30">
+            <div className="max-w-7xl mx-auto flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <button onClick={onBack} className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm">
+                  <ArrL s={16}/> Back to Annotation
+                </button>
+                <div>
+                  <h1 className="text-lg font-bold text-gray-900 flex items-center gap-2"><BarI s={18} c="text-teal-600"/> Evaluation Report</h1>
+                  <p className="text-xs text-gray-400 mt-0.5">Inter-annotator: {iaa.pairs?.[0]?.annotator_a} vs {iaa.pairs?.[0]?.annotator_b}</p>
                 </div>
-                {appMode === 'annotation' && (
-                  <div className="flex items-center gap-3">
-                    <button onClick={() => setShowFeedbackPanel(!showFeedbackPanel)} className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${showFeedbackPanel ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-                      <MessageSquare size={18} /> Notes & Feedback
-                    </button>
-                    <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer">
-                      <Upload size={18} /> Import JSON
-                      <input type="file" accept=".json" onChange={importData} className="hidden" />
-                    </label>
-                    <button onClick={exportData} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-                      <Download size={18} /> Export JSON
-                    </button>
-                  </div>
-                )}
               </div>
-              {appMode === 'annotation' && (
-                <div className="flex items-center gap-2">
-                  {stages.map((stage, idx) => (
-                    <React.Fragment key={stage.id}>
-                      <button onClick={() => setCurrentStage(stage.id)} className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${currentStage === stage.id ? 'bg-blue-100 text-blue-700 font-medium' : currentStage > stage.id ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                        <stage.icon size={18} />
-                        <span className="hidden sm:inline">Stage {stage.id}:</span> {stage.name}
-                      </button>
-                      {idx < stages.length - 1 && <ChevronRight className="text-gray-400" size={20} />}
-                    </React.Fragment>
-                  ))}
-                </div>
-              )}
-              {appMode === 'evaluation' && (
-                <div className="text-sm text-gray-400">Import a JSON evaluation report to visualize annotation quality metrics</div>
-              )}
+              {/* Summary chips */}
+              <div className="flex gap-3 text-sm">
+                {[['§1 F1',s1.section_f1],['Leaf F1',s2.macro_leaf_f1],['Op.Acc',s2.macro_operator_accuracy]].map(([l,v])=>(
+                  <div key={l} className={`px-3 py-1.5 rounded-lg ${sBg(v)}`}>
+                    <span className="text-xs text-gray-500">{l} </span>
+                    <span className={`font-bold ${sColor(v)}`}>{pct(v)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Sub tabs */}
+            <div className="max-w-7xl mx-auto mt-3 flex gap-1">
+              {tabs.map(t=>(
+                <button key={t.id} onClick={()=>setActiveTab(t.id)} className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm transition-all ${activeTab===t.id?'bg-teal-100 text-teal-700 font-semibold':'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                  <t.icon s={15}/>{t.label}
+                </button>
+              ))}
             </div>
           </header>
 
-          {/* Feedback Panel (annotation mode only) */}
-          {appMode === 'annotation' && showFeedbackPanel && (
-            <div className="max-w-7xl mx-auto px-6 py-4">
-              <div className="bg-purple-50 border border-purple-200 rounded-xl p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-purple-900 flex items-center gap-2">
-                    <MessageSquare size={20} /> Annotator Notes & App Feedback
-                  </h2>
-                  <button onClick={() => setShowFeedbackPanel(false)} className="text-purple-600 hover:text-purple-800">
-                    <span className="text-sm">Close</span>
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-purple-800 mb-2">
-                      Annotator Notes <span className="text-purple-500 font-normal">(notes about this document annotation)</span>
-                    </label>
-                    <textarea
-                      value={annotatorNotes}
-                      onChange={(e) => setAnnotatorNotes(e.target.value)}
-                      placeholder="Add any notes about this document, special cases, ambiguities you encountered, decisions you made..."
-                      rows={5}
-                      className="w-full px-4 py-3 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-purple-800 mb-2">
-                      App Feedback <span className="text-purple-500 font-normal">(suggestions for improving this tool)</span>
-                    </label>
-                    <textarea
-                      value={appFeedback}
-                      onChange={(e) => setAppFeedback(e.target.value)}
-                      placeholder="Share feedback about the annotation tool: bugs, feature requests, UI improvements, confusing parts..."
-                      rows={5}
-                      className="w-full px-4 py-3 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none bg-white"
-                    />
-                  </div>
-                </div>
-                <p className="text-xs text-purple-600 mt-3">These notes will be exported to a separate feedback file (not included in the main annotation file).</p>
-              </div>
-            </div>
-          )}
+          <main className="max-w-7xl mx-auto px-6 py-6">
 
-          {appMode === 'annotation' && (
-            <div className="max-w-7xl mx-auto px-6 py-4">
-              <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Document Title <span className="text-red-500">*</span></label>
-                <input type="text" value={documentTitle} onChange={(e) => setDocumentTitle(e.target.value)} placeholder="Enter the policy document title (e.g., Aetna CPB 0743 - Spinal Surgery)" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-              </div>
-            </div>
-          )}
-
-          {appMode === 'annotation' ? (
-            <>
-              <main className="max-w-7xl mx-auto px-6 pb-24">
-                {currentStage === 1 && <Stage1SectionExtraction sections={sections} setSections={setSections} />}
-                {currentStage === 2 && <Stage2AtomicBreakdown sections={sections} sectionTrees={sectionTrees} setSectionTrees={setSectionTrees} />}
-                {currentStage === 3 && <Stage3CPTMapping sections={sections} sectionTrees={sectionTrees} cptMappings={cptMappings} setCptMappings={setCptMappings} />}
-              </main>
-              <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-4">
-                <div className="max-w-7xl mx-auto flex justify-between">
-                  <button onClick={() => setCurrentStage(Math.max(1, currentStage - 1))} disabled={currentStage === 1} className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${currentStage === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
-                    <ArrowLeft size={18} /> Previous Stage
-                  </button>
-                  <div className="text-sm text-gray-500 flex items-center gap-3">
-                    <span>{sections.length} section(s)</span>
-                    <span>•</span>
-                    <span>{Object.keys(sectionTrees).length} tree(s)</span>
-                    <span>•</span>
-                    <span>{cptMappings.length} CPT mapping(s)</span>
-                  </div>
-                  <button onClick={() => setCurrentStage(Math.min(3, currentStage + 1))} disabled={currentStage === 3 || !canProceed()} className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-colors ${currentStage === 3 || !canProceed() ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
-                    Next Stage <ArrowRight size={18} />
-                  </button>
+            {/* ── STAGE 1 ── */}
+            {activeTab==='s1'&&(
+              <div className="space-y-6">
+                {/* metrics */}
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                  <MCard label="Precision"       value={s1.section_precision}/>
+                  <MCard label="Recall"          value={s1.section_recall}/>
+                  <MCard label="F1"              value={s1.section_f1}/>
+                  <MCard label="Text Sim."       value={s1.mean_text_similarity}/>
+                  <MCard label="Matched"         raw={s1.n_matched??'—'} value={null} sub={`of ${s1.n_ref_total??'?'} ref`}/>
+                  <MCard label="Spurious"        raw={s1.n_spurious??'—'} value={s1.n_spurious===0?1:0} sub="extra predicted"/>
                 </div>
-              </footer>
-            </>
-          ) : (
-            <EvaluationReport />
-          )}
+
+                {/* 4-column category cards */}
+                {[
+                  {title:`Matched — Exact (${exactMatches.length})`,bg:'bg-green-50',border:'border-green-200',badge:'bg-green-100 text-green-800',items:exactMatches,kind:'match'},
+                  {title:`Matched — Subset (${subsetMatches.length})`,bg:'bg-yellow-50',border:'border-yellow-200',badge:'bg-yellow-100 text-yellow-800',items:subsetMatches,kind:'match'},
+                  {title:`Missed — Not Predicted (${missedSecs.length})`,bg:'bg-red-50',border:'border-red-200',badge:'bg-red-100 text-red-800',items:missedSecs,kind:'missed'},
+                  {title:`Spurious — Extra Predicted (${spuriousSecs.length})`,bg:'bg-orange-50',border:'border-orange-200',badge:'bg-orange-100 text-orange-800',items:spuriousSecs,kind:'spurious'},
+                ].map(cat=>(
+                  <SectionCategory key={cat.title} cat={cat}/>
+                ))}
+              </div>
+            )}
+
+            {/* ── STAGE 2 ── */}
+            {activeTab==='s2'&&(
+              <div className="space-y-5">
+                {/* macro metrics */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <MCard label="Leaf F1 (macro)"     value={s2.macro_leaf_f1}/>
+                  <MCard label="Operator Accuracy"   value={s2.macro_operator_accuracy}/>
+                  <MCard label="Evidence Accuracy"   value={s2.macro_evidence_accuracy}/>
+                </div>
+
+                {/* note about leaf text truncation */}
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 flex items-start gap-2">
+                  <InfoI s={14} c="text-amber-600 shrink-0 mt-0.5"/>
+                  <span>Leaf text ending in <code className="bg-amber-100 px-1 rounded font-mono">…</code> is truncated by the report generator. Load the Annotation JSON (optional button below) to show the full untruncated text.</span>
+                </div>
+
+                {/* Legend */}
+                <div className="flex flex-wrap gap-4 text-xs text-gray-500">
+                  {[['tree-matched border-l-4 border-green-400','Matched leaf (✓)'],['tree-missed border-l-4 border-red-400','Missed (in ref, not in pred)'],['tree-extra border-l-4 border-orange-400','Extra (in pred, not in ref)'],['tree-operator','Operator node']].map(([cls,lbl])=>(
+                    <span key={lbl} className="flex items-center gap-1.5">
+                      <span className={`inline-block w-4 h-4 rounded-sm text-xs font-mono flex items-center justify-center ${cls}`}></span>{lbl}
+                    </span>
+                  ))}
+                </div>
+
+                {/* annotation loader + filter */}
+                <div className="flex items-center gap-4 flex-wrap">
+                  <span className="text-sm font-semibold text-gray-700">Per-Section ({shownIds.length} of {secIds.length})</span>
+                  <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer select-none">
+                    <input type="checkbox" checked={filterLow} onChange={e=>setFilterLow(e.target.checked)} className="rounded text-red-500"/>
+                    Show low F1 only (&lt;80%)
+                  </label>
+                  <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs cursor-pointer border ${annotData?'bg-teal-50 border-teal-300 text-teal-700':'bg-white border-gray-300 text-gray-600 hover:border-teal-400 hover:text-teal-600'}`}>
+                    <FileI s={13}/>
+                    {annotData?`Annotation loaded ✓ — showing full leaf text`:'Load Annotation JSON (optional — for full leaf text)'}
+                    <input type="file" accept=".json" onChange={loadAnnot} className="hidden"/>
+                  </label>
+                  {annotData&&<button onClick={()=>setAnnotData(null)} className="text-xs text-gray-400 hover:text-red-500 px-1">✕ clear</button>}
+                </div>
+
+                <div className="space-y-2">
+                  {shownIds.map(secId=>{
+                    const sec=perSec[secId];
+                    const info=secTextMap[secId]||{};
+                    const open=expandedSec===secId;
+                    const refLeaves=annotLeafMap[secId]||null;
+                    return(
+                      <SecTreeRow key={secId} secId={secId} sec={sec} info={info}
+                        open={open} onToggle={()=>setExpandedSec(open?null:secId)}
+                        refLeaves={refLeaves} resolveText={(t)=>resolveText(secId,t)}/>
+                    );
+                  })}
+                  {shownIds.length===0&&<div className="text-center py-8 text-gray-400 text-sm">No sections match filter.</div>}
+                </div>
+              </div>
+            )}
+
+            {/* ── STAGE 3 ── */}
+            {activeTab==='s3'&&(
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <MCard label="Code Precision"       value={s3.code_precision}/>
+                  <MCard label="Code Recall"          value={s3.code_recall}/>
+                  <MCard label="Code F1"              value={s3.code_f1}/>
+                  <MCard label="Section Link Jaccard" value={s3.mean_section_link_jaccard}/>
+                </div>
+                {s3.code_f1===0&&<div className="rounded-lg bg-red-50 border border-red-200 p-4 text-sm text-red-800">Stage 3 metrics are all 0 — CPT code mapping may not have been evaluated or the annotator did not complete Stage 3.</div>}
+              </div>
+            )}
+
+            {/* ── INTER-ANNOTATOR ── */}
+            {activeTab==='iaa'&&(
+              <div className="space-y-6">
+                {iaa.pairs?.length>0&&(
+                  <div className="overflow-x-auto rounded-xl border border-gray-200">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>{['Annotator A','Annotator B','§1 F1','Leaf F1','Op Acc','CPT F1','Link Jaccard'].map(h=>(
+                          <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                        ))}</tr>
+                      </thead>
+                      <tbody>
+                        {iaa.pairs.map((p,i)=>(
+                          <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
+                            <td className="px-4 py-3 font-mono text-xs">{p.annotator_a}</td>
+                            <td className="px-4 py-3 font-mono text-xs">{p.annotator_b}</td>
+                            <td className={`px-4 py-3 font-bold text-sm ${sColor(p.stage1_section_f1)}`}>{pct(p.stage1_section_f1)}</td>
+                            <td className={`px-4 py-3 font-bold text-sm ${sColor(p.stage2_leaf_f1)}`}>{pct(p.stage2_leaf_f1)}</td>
+                            <td className={`px-4 py-3 font-bold text-sm ${sColor(p.stage2_operator_accuracy)}`}>{pct(p.stage2_operator_accuracy)}</td>
+                            <td className={`px-4 py-3 font-bold text-sm ${sColor(p.stage3_code_f1)}`}>{pct(p.stage3_code_f1)}</td>
+                            <td className={`px-4 py-3 font-bold text-sm ${sColor(p.stage3_link_jaccard)}`}>{pct(p.stage3_link_jaccard)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {errSum.by_type&&(
+                  <div>
+                    <h3 className="font-semibold text-gray-700 mb-3">Error Breakdown</h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
+                      {Object.entries(errSum.by_type).map(([type,count])=>(
+                        <div key={type} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                          <div className="text-2xl font-bold text-gray-700">{count}</div>
+                          <div className="text-xs text-gray-500 mt-1">{type.replace(/_/g,' ')}</div>
+                        </div>
+                      ))}
+                      <div className="rounded-xl border border-gray-200 bg-gray-100 p-4">
+                        <div className="text-2xl font-bold text-gray-700">{errSum.total_entries??'—'}</div>
+                        <div className="text-xs text-gray-500 mt-1">total entries</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </main>
         </div>
       );
     }
 
-    // Stage 1: Section-level Requirement Extraction
-    function Stage1SectionExtraction({ sections, setSections }) {
-      const [requirementText, setRequirementText] = useState('');
-      const [editingId, setEditingId] = useState(null);
-
-      const addSection = () => {
-        if (!requirementText.trim()) return;
-        if (editingId) {
-          setSections(sections.map(s => s.id === editingId ? { ...s, text: requirementText } : s));
-          setEditingId(null);
-        } else {
-          setSections([...sections, { id: generateSectionId(sections), text: requirementText, created_at: new Date().toISOString() }]);
-        }
-        setRequirementText('');
-      };
-
-      const editSection = (section) => {
-        setRequirementText(section.text);
-        setEditingId(section.id);
-      };
-
-      const deleteSection = (id) => {
-        setSections(sections.filter(s => s.id !== id));
-        if (editingId === id) {
-          setEditingId(null);
-          setRequirementText('');
-        }
-      };
-
-      return (
-        <div>
-          <InstructionsPanel title="Stage 1 Instructions: Section-level Requirement Extraction">
-            <div className="space-y-3">
-              <p><strong>Goal:</strong> Extract all requirement sections from the policy document.</p>
-              <div>
-                <p className="font-medium mb-1">Steps:</p>
-                <ol className="list-decimal list-inside space-y-1 ml-2">
-                  <li>Open the policy document in a separate browser tab</li>
-                  <li>Find a requirement section (e.g., under "Medical Necessity" or "Additional Notes")</li>
-                  <li>Copy the entire section text and paste it into the text area below</li>
-                  <li>Click "Add Section" to save</li>
-                  <li>Repeat for all requirement sections in the document</li>
-                </ol>
-              </div>
-              <p className="text-blue-600 italic">💡 Tip: Keep sections as cohesive units. If there's a clear procedure/anatomy heading with its criteria checklist, keep them together as one section.</p>
-            </div>
-          </InstructionsPanel>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">{editingId ? 'Edit Section' : 'Add New Section'}</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Section Requirements</label>
-                  <textarea value={requirementText} onChange={(e) => setRequirementText(e.target.value)} placeholder="Paste or type the section requirement text here..." rows={12} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" />
-                </div>
-                <div className="flex gap-3">
-                  <button onClick={addSection} disabled={!requirementText.trim()} className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors ${requirementText.trim() ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
-                    <Plus size={18} /> {editingId ? 'Update Section' : 'Add Section'}
+    /* Section category panel for Stage 1 */
+    function SectionCategory({cat}){
+      const [expanded,setExpanded]=useState(null);
+      if(cat.items.length===0)return(
+        <div className={`rounded-xl border ${cat.border} ${cat.bg} p-4`}>
+          <h3 className="font-semibold text-gray-700 text-sm">{cat.title}</h3>
+          <p className="text-xs text-gray-400 mt-2">None</p>
+        </div>
+      );
+      return(
+        <div className={`rounded-xl border ${cat.border} ${cat.bg}`}>
+          <div className="p-4 border-b border-gray-200">
+            <h3 className="font-semibold text-gray-800 text-sm">{cat.title}</h3>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {cat.items.map((item,i)=>{
+              const key=cat.kind==='match'?item.ref_id:item.id;
+              const isOpen=expanded===key;
+              const sim=cat.kind==='match'?item.similarity:null;
+              return(
+                <div key={key}>
+                  <button onClick={()=>setExpanded(isOpen?null:key)} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/60 transition-colors">
+                    <span className="font-mono text-xs font-bold text-gray-600 w-16 shrink-0">
+                      {cat.kind==='match'?`${item.ref_id} ↔ ${item.pred_id}`:item.id}
+                    </span>
+                    <p className="flex-1 text-sm text-gray-700">
+                      {cat.kind==='match'?item.ref_text:(item.text||'')}
+                    </p>
+                    {sim!=null&&<span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${sBg(sim)} ${sColor(sim)}`}>sim {(sim*100).toFixed(1)}%</span>}
+                    {cat.kind==='match'&&item.is_subset&&<span className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded-full shrink-0">{item.subset_direction==='ref_in_pred'?'ref⊂pred':'pred⊂ref'}</span>}
+                    {isOpen?<ChevronD s={15} c="text-gray-400 shrink-0"/>:<ChevronR s={15} c="text-gray-400 shrink-0"/>}
                   </button>
-                  {editingId && (
-                    <button onClick={() => { setEditingId(null); setRequirementText(''); }} className="px-6 py-3 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Cancel</button>
+                  {isOpen&&(
+                    <div className="px-4 pb-4 bg-white/70 space-y-3">
+                      {cat.kind==='match'&&(
+                        <>
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                            <div>
+                              <div className="text-xs font-semibold text-blue-700 mb-1">Reference ({item.ref_id})</div>
+                              <div className="text-xs bg-blue-50 border border-blue-100 rounded p-3 whitespace-pre-wrap">{item.ref_text}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-semibold text-purple-700 mb-1">Predicted ({item.pred_id})</div>
+                              <div className="text-xs bg-purple-50 border border-purple-100 rounded p-3 whitespace-pre-wrap">{item.pred_text}</div>
+                            </div>
+                          </div>
+                          {item.diff_spans&&item.diff_spans.length>0&&(
+                            <div>
+                              <div className="text-xs font-semibold text-gray-600 mb-1">Diff view <span className="font-normal text-gray-400">(yellow = inserted in pred, red = removed from ref)</span></div>
+                              <DiffView spans={item.diff_spans}/>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {cat.kind!=='match'&&(
+                        <div className="text-xs bg-white border border-gray-100 rounded p-3 whitespace-pre-wrap">{item.text}</div>
+                      )}
+                    </div>
                   )}
                 </div>
-              </div>
-            </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
 
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Extracted Sections ({sections.length})</h2>
-              {sections.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <Layers size={48} className="mx-auto mb-4 opacity-50" />
-                  <p>No sections extracted yet.</p>
-                  <p className="text-sm">Paste requirement text and add sections to begin.</p>
-                </div>
-              ) : (
-                <div className="space-y-3 max-h-[600px] overflow-y-auto">
-                  {sections.map((section) => (
-                    <div key={section.id} className="p-4 rounded-lg border-2 border-gray-200 bg-gray-50">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="font-mono text-xs font-bold bg-white px-2 py-0.5 rounded border border-gray-300">{section.id}</span>
-                          </div>
-                          <p className="text-sm whitespace-pre-wrap line-clamp-4">{section.text}</p>
-                        </div>
-                        <div className="flex gap-1">
-                          <button onClick={() => editSection(section)} className="p-2 hover:bg-white rounded-lg transition-colors" title="Edit"><FileText size={16} /></button>
-                          <button onClick={() => deleteSection(section.id)} className="p-2 hover:bg-white rounded-lg transition-colors text-red-600" title="Delete"><Trash2 size={16} /></button>
-                        </div>
-                      </div>
+    /* Per-section tree row for Stage 2 */
+    function SecTreeRow({secId,sec,info,open,onToggle,refLeaves,resolveText}){
+      return(
+        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+          <button onClick={onToggle} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors">
+            <span className="font-mono text-sm font-bold text-gray-600 w-16 shrink-0">{secId}</span>
+            {/* metric chips */}
+            <div className="flex flex-wrap gap-1.5 flex-1">
+              {[['Leaf F1',sec.leaf_f1],['Op.Acc',sec.operator_accuracy],['Evid.Acc',sec.evidence_accuracy]].map(([l,v])=>(
+                <span key={l} className={`text-xs px-2 py-0.5 rounded-full font-medium ${sBg(v)} ${sColor(v)}`}>{l}: {pct(v)}</span>
+              ))}
+            </div>
+            {open?<ChevronD s={16} c="text-gray-400 shrink-0"/>:<ChevronR s={16} c="text-gray-400 shrink-0"/>}
+          </button>
+
+          {open&&(
+            <div className="border-t border-gray-100 p-4 bg-gray-50 space-y-4">
+              {/* section-level stats */}
+              <div className="flex flex-wrap gap-5 text-xs text-gray-500 border-b border-gray-200 pb-3">
+                <span>Leaf precision: <strong className={sColor(sec.leaf_precision)}>{pct(sec.leaf_precision)}</strong></span>
+                <span>Leaf recall: <strong className={sColor(sec.leaf_recall)}>{pct(sec.leaf_recall)}</strong></span>
+                <span>Mean leaf sim: <strong>{sec.mean_leaf_similarity!=null?sec.mean_leaf_similarity.toFixed(4):'N/A'}</strong></span>
+              </div>
+
+              {/* section text (from stage1 lookup) */}
+              {(info.ref||info.pred)&&(
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  {info.ref&&(
+                    <div>
+                      <div className="text-xs font-semibold text-blue-700 mb-1">Reference section text</div>
+                      <div className="text-xs bg-blue-50 border border-blue-100 rounded p-3 whitespace-pre-wrap leading-relaxed">{info.ref}</div>
                     </div>
-                  ))}
+                  )}
+                  {info.pred&&(
+                    <div>
+                      <div className="text-xs font-semibold text-purple-700 mb-1">Predicted section text {info.predId&&<span className="font-normal text-gray-400">({info.predId})</span>}</div>
+                      <div className="text-xs bg-purple-50 border border-purple-100 rounded p-3 whitespace-pre-wrap leading-relaxed">{info.pred}</div>
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // Stage 2: Atomic Breakdown with Tree Builder
-    function Stage2AtomicBreakdown({ sections, sectionTrees, setSectionTrees }) {
-      const [selectedSectionId, setSelectedSectionId] = useState(sections.length > 0 ? sections[0].id : null);
-      const currentSection = sections.find(s => s.id === selectedSectionId);
-      const currentTree = sectionTrees[selectedSectionId] || null;
-      const updateTree = (newTree) => setSectionTrees({ ...sectionTrees, [selectedSectionId]: newTree });
-
-      return (
-        <div>
-          <InstructionsPanel title="Stage 2 Instructions: Break Section Requirements into Atomic Items">
-            <div className="space-y-3">
-              <p><strong>Goal:</strong> Convert each section's requirements into a structured logic tree with atomic (individual, checkable) items.</p>
-              <div>
-                <p className="font-medium mb-1">Steps:</p>
-                <ol className="list-decimal list-inside space-y-1 ml-2">
-                  <li>Select a section from the left panel</li>
-                  <li>Read the section content in the middle panel</li>
-                  <li>Identify atomic requirements and copy each one</li>
-                  <li>Paste into the tree builder and click "+" to add</li>
-                  <li>Use operators to structure the logic (see below)</li>
-                  <li>For each leaf item, check all applicable <code className="bg-gray-200 px-1 rounded">evidence_sources</code> (one or more document types needed to verify)</li>
-                  <li>Flag <span className="inline-block px-2 py-0.5 bg-amber-100 text-amber-800 rounded text-xs font-medium">⏱ Time Sensitive</span> for requirements involving a specific time duration or recency constraint (e.g., "6 weeks of therapy", "within 6 months")</li>
-                  <li>Repeat for all sections</li>
-                </ol>
-              </div>
-              <div>
-                <p className="font-medium mb-1">Logic Operators:</p>
-                <ul className="space-y-1 ml-2">
-                  <li><span className="inline-block px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs font-mono font-bold">ALL</span> — All children must be satisfied (AND)</li>
-                  <li><span className="inline-block px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded text-xs font-mono font-bold">ANY</span> — At least one child must be satisfied (OR)</li>
-                  <li><span className="inline-block px-2 py-0.5 bg-red-100 text-red-800 rounded text-xs font-mono font-bold">NOT</span> — Must NOT be satisfied</li>
-                  <li><span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-mono font-bold">IF</span> — Conditional: if first child is true, check remaining</li>
-                  <li><span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-800 rounded text-xs font-mono font-bold">UNLESS</span> — Required unless condition is met</li>
-                </ul>
-              </div>
-              <div>
-                <p className="font-medium mb-1">Evidence Sources (fixed vocabulary, multi-select):</p>
-                <p className="ml-2 text-sm">Check all document types needed to verify each requirement — you may select more than one. If none fit, check "other" and note details in the feedback panel.</p>
-                <ul className="space-y-1 ml-2 mt-1 text-sm">
-                  <li><code className="bg-gray-200 px-1 rounded">clinical_note</code> — Progress notes, H&P, clinical assessments</li>
-                  <li><code className="bg-gray-200 px-1 rounded">imaging_report</code> — MRI, CT, X-ray reports</li>
-                  <li><code className="bg-gray-200 px-1 rounded">therapy_records</code> — PT/OT notes, conservative treatment records</li>
-                  <li><code className="bg-gray-200 px-1 rounded">lab_result</code> — Lab tests, blood work</li>
-                  <li><code className="bg-gray-200 px-1 rounded">prior_auth_form</code> — Prior authorization documentation</li>
-                  <li><code className="bg-gray-200 px-1 rounded">operative_report</code> — Surgical notes, procedure records</li>
-                  <li><code className="bg-gray-200 px-1 rounded">pathology_report</code> — Biopsy results, pathology findings</li>
-                  <li><code className="bg-gray-200 px-1 rounded">referral_letter</code> — Specialist referrals, consultation requests</li>
-                </ul>
-              </div>
-              <p className="text-orange-600 italic">⚠️ Important: Do NOT create custom labels. If a category doesn't fit, select "other" and describe the issue in Notes & Feedback.</p>
-            </div>
-          </InstructionsPanel>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className="lg:col-span-3 bg-white rounded-xl border border-gray-200 p-4">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Sections</h2>
-              <div className="space-y-2 max-h-[600px] overflow-y-auto">
-                {sections.map((section) => (
-                  <button key={section.id} onClick={() => setSelectedSectionId(section.id)} className={`w-full text-left p-3 rounded-lg border-2 transition-all ${selectedSectionId === section.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-sm font-bold">{section.id}</span>
-                      {sectionTrees[section.id] && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">✓ Tree</span>}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="lg:col-span-4 bg-white rounded-xl border border-gray-200 p-4">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Section Content</h2>
-              {currentSection ? (
-                <div className="p-4 rounded-lg border border-gray-200 bg-gray-50 max-h-[600px] overflow-y-auto">
-                  <div className="mb-2">
-                    <span className="font-mono text-xs font-bold bg-white px-2 py-0.5 rounded border border-gray-300">{currentSection.id}</span>
-                  </div>
-                  <p className="text-sm whitespace-pre-wrap select-all">{currentSection.text}</p>
-                </div>
-              ) : <p className="text-gray-500 text-center py-8">Select a section</p>}
-            </div>
-
-            <div className="lg:col-span-5 bg-white rounded-xl border border-gray-200 p-4">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Logic Tree Builder</h2>
-              {selectedSectionId && <TreeBuilder tree={currentTree} setTree={updateTree} />}
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // Tree Builder Component
-    function TreeBuilder({ tree, setTree }) {
-      const [newItemText, setNewItemText] = useState('');
-      const createNode = (type, children = [], text = '') => ({ id: `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, type, text, children, evidence_sources: [], time_sensitive: false });
-
-      const operators = ['ALL', 'ANY', 'NOT', 'IF', 'UNLESS'];
-
-      const initializeTree = () => setTree(createNode('ALL', []));
-
-      const addLeafNode = () => {
-        if (!newItemText.trim()) return;
-        if (!tree) setTree(createNode('ALL', [createNode('leaf', [], newItemText)]));
-        else setTree({ ...tree, children: [...tree.children, createNode('leaf', [], newItemText)] });
-        setNewItemText('');
-      };
-
-      const wrapWithOperator = (op) => {
-        if (!tree) setTree(createNode(op, []));
-        else setTree(createNode(op, [tree]));
-      };
-
-      const updateNode = (nodeId, updates) => {
-        const updateRec = (node) => {
-          if (node.id === nodeId) return { ...node, ...updates };
-          if (node.children) return { ...node, children: node.children.map(updateRec) };
-          return node;
-        };
-        setTree(updateRec(tree));
-      };
-
-      const deleteNode = (nodeId) => {
-        const deleteRec = (node) => {
-          if (node.id === nodeId) return null;
-          if (node.children) return { ...node, children: node.children.map(deleteRec).filter(Boolean) };
-          return node;
-        };
-        setTree(deleteRec(tree));
-      };
-
-      const addChildToNode = (parentId, newChild) => {
-        const addRec = (node) => {
-          if (node.id === parentId) return { ...node, children: [...(node.children || []), newChild] };
-          if (node.children) return { ...node, children: node.children.map(addRec) };
-          return node;
-        };
-        setTree(addRec(tree));
-      };
-
-      // Convert a leaf node into an operator (the leaf becomes the first child)
-      const convertNodeToOperator = (nodeId, operatorType) => {
-        const convertRec = (node) => {
-          if (node.id === nodeId) {
-            // Create a new leaf with the original text and evidence_sources
-            const childLeaf = createNode('leaf', [], node.text);
-            childLeaf.evidence_sources = node.evidence_sources || [];
-            // Return new operator with the leaf as first child
-            return { ...node, type: operatorType, text: '', children: [childLeaf], evidence_sources: [] };
-          }
-          if (node.children) return { ...node, children: node.children.map(convertRec) };
-          return node;
-        };
-        setTree(convertRec(tree));
-      };
-
-      return (
-        <div className="space-y-4">
-          <div className="flex gap-2">
-            <input type="text" value={newItemText} onChange={(e) => setNewItemText(e.target.value)} placeholder="Paste atomic requirement text..." className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" onKeyPress={(e) => e.key === 'Enter' && addLeafNode()} />
-            <button onClick={addLeafNode} disabled={!newItemText.trim()} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"><Plus size={18} /></button>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <span className="text-sm text-gray-600 py-1">Wrap tree with:</span>
-            {operators.map(op => <button key={op} onClick={() => wrapWithOperator(op)} className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg font-mono">{op}</button>)}
-          </div>
-
-          <div className="border border-gray-200 rounded-lg p-4 min-h-[300px] max-h-[400px] overflow-y-auto bg-gray-50">
-            {!tree ? (
-              <div className="text-center py-8 text-gray-500">
-                <p>No tree structure yet.</p>
-                <p className="text-sm">Add atomic items or initialize with an operator.</p>
-                <button onClick={initializeTree} className="mt-4 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200">Initialize with ALL</button>
-              </div>
-            ) : <TreeNode node={tree} depth={0} updateNode={updateNode} deleteNode={deleteNode} addChildToNode={addChildToNode} createNode={createNode} convertNodeToOperator={convertNodeToOperator} />}
-          </div>
-        </div>
-      );
-    }
-
-    // Tree Node Component (recursive)
-    function TreeNode({ node, depth, updateNode, deleteNode, addChildToNode, createNode, convertNodeToOperator }) {
-      const [isExpanded, setIsExpanded] = useState(true);
-      const [isEditing, setIsEditing] = useState(false);
-      const [editText, setEditText] = useState(node.text);
-      const [showAddChild, setShowAddChild] = useState(false);
-      const [newChildText, setNewChildText] = useState('');
-      const [newChildOp, setNewChildOp] = useState('leaf');
-      const [showConvertMenu, setShowConvertMenu] = useState(false);
-
-      const isOperator = ['ALL', 'ANY', 'NOT', 'IF', 'UNLESS'].includes(node.type);
-      const operators = ['ALL', 'ANY', 'NOT', 'IF', 'UNLESS'];
-      const opColors = { ALL: 'bg-green-100 text-green-800 border-green-300', ANY: 'bg-yellow-100 text-yellow-800 border-yellow-300', NOT: 'bg-red-100 text-red-800 border-red-300', IF: 'bg-blue-100 text-blue-800 border-blue-300', UNLESS: 'bg-purple-100 text-purple-800 border-purple-300', leaf: 'bg-white border-gray-300' };
-
-      const saveEdit = () => { updateNode(node.id, { text: editText }); setIsEditing(false); };
-      const addChild = () => {
-        if (newChildOp === 'leaf' && !newChildText.trim()) return;
-        addChildToNode(node.id, createNode(newChildOp, [], newChildOp === 'leaf' ? newChildText : ''));
-        setNewChildText(''); setShowAddChild(false);
-      };
-
-      return (
-        <div className={`${depth > 0 ? 'ml-6 border-l-2 border-gray-200 pl-4' : ''}`}>
-          <div className={`flex items-start gap-2 p-2 rounded-lg border ${opColors[node.type]} mb-2`}>
-            {isOperator && node.children?.length > 0 && <button onClick={() => setIsExpanded(!isExpanded)} className="mt-1 p-0.5 hover:bg-black/10 rounded">{isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button>}
-            <div className="flex-1 min-w-0">
-              {isOperator ? (
-                <div className="flex items-center gap-2">
-                  <select value={node.type} onChange={(e) => updateNode(node.id, { type: e.target.value })} className="font-mono font-bold text-sm bg-transparent border-none focus:ring-0 cursor-pointer">{operators.map(op => <option key={op} value={op}>{op}</option>)}</select>
-                  <span className="text-xs text-gray-500">({node.children?.length || 0} items)</span>
-                </div>
-              ) : isEditing ? (
-                <div className="flex gap-2">
-                  <input type="text" value={editText} onChange={(e) => setEditText(e.target.value)} className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded" onKeyPress={(e) => e.key === 'Enter' && saveEdit()} autoFocus />
-                  <button onClick={saveEdit} className="text-xs text-blue-600 hover:underline">Save</button>
-                </div>
-              ) : <p className="text-sm cursor-pointer hover:bg-black/5 rounded p-1 -m-1" onClick={() => setIsEditing(true)}>{node.text || <em className="text-gray-400">Click to edit</em>}</p>}
-
-              {/* Leaf node - evidence source, time sensitive flag, and convert to operator */}
-              {!isOperator && (
-                <div className="mt-2 space-y-2">
-                  <div className="flex gap-2 items-start flex-wrap">
-                    <span className="text-xs text-gray-500 mt-0.5">Evidence:</span>
-                    <div className="flex flex-wrap gap-x-3 gap-y-1">
-                      {EVIDENCE_SOURCES.map(src => {
-                        const checked = (node.evidence_sources || []).includes(src);
-                        return (
-                          <label key={src} className="flex items-center gap-1 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => {
-                                const current = node.evidence_sources || [];
-                                const updated = checked ? current.filter(s => s !== src) : [...current, src];
-                                updateNode(node.id, { evidence_sources: updated });
-                              }}
-                              className="accent-indigo-600"
-                            />
-                            <span className="text-xs text-gray-600">{src}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                    <span className="text-gray-300">|</span>
-                    <div className="relative">
-                      <button
-                        onClick={() => setShowConvertMenu(!showConvertMenu)}
-                        className="text-xs px-2 py-1 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200"
-                        title="Convert this item to an operator with children"
-                      >
-                        ↳ Expand to...
-                      </button>
-                      {showConvertMenu && (
-                        <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded shadow-lg z-10">
-                          {operators.map(op => (
-                            <button
-                              key={op}
-                              onClick={() => { convertNodeToOperator(node.id, op); setShowConvertMenu(false); }}
-                              className={`block w-full text-left px-3 py-1 text-xs hover:bg-gray-100 ${opColors[op].split(' ')[0]}`}
-                            >
-                              {op}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => updateNode(node.id, { time_sensitive: !node.time_sensitive })}
-                      className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded border transition-all ${node.time_sensitive ? 'bg-amber-100 text-amber-800 border-amber-400 font-medium' : 'bg-white text-gray-400 border-gray-200 hover:border-amber-300 hover:text-amber-600'}`}
-                      title="Flag if this requirement involves a time duration or recency constraint that cannot be compensated retroactively"
-                    >
-                      ⏱ Time Sensitive
-                    </button>
-                    {node.time_sensitive && <span className="text-xs text-amber-600 italic">Cannot be compensated retroactively</span>}
-                  </div>
-                </div>
+              {!info.ref&&!info.pred&&(
+                <div className="text-xs text-gray-400 italic">Section text not available (section may not appear in stage1 matches).</div>
               )}
-            </div>
 
-            <div className="flex gap-1">
-              {isOperator && <button onClick={() => setShowAddChild(!showAddChild)} className="p-1 hover:bg-black/10 rounded text-gray-600" title="Add child"><Plus size={14} /></button>}
-              <button onClick={() => deleteNode(node.id)} className="p-1 hover:bg-black/10 rounded text-red-600" title="Delete"><Trash2 size={14} /></button>
-            </div>
-          </div>
-
-          {showAddChild && (
-            <div className="ml-6 mb-2 p-2 bg-gray-100 rounded-lg flex gap-2 items-center">
-              <select value={newChildOp} onChange={(e) => setNewChildOp(e.target.value)} className="text-xs px-2 py-1 border border-gray-300 rounded">
-                <option value="leaf">Leaf (text)</option>
-                {operators.map(op => <option key={op} value={op}>{op}</option>)}
-              </select>
-              {newChildOp === 'leaf' && <input type="text" value={newChildText} onChange={(e) => setNewChildText(e.target.value)} placeholder="Requirement text..." className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded" onKeyPress={(e) => e.key === 'Enter' && addChild()} />}
-              <button onClick={addChild} className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">Add</button>
-              <button onClick={() => setShowAddChild(false)} className="px-2 py-1 text-xs text-gray-600 hover:underline">Cancel</button>
-            </div>
-          )}
-
-          {isExpanded && node.children?.map(child => <TreeNode key={child.id} node={child} depth={depth + 1} updateNode={updateNode} deleteNode={deleteNode} addChildToNode={addChildToNode} createNode={createNode} convertNodeToOperator={convertNodeToOperator} />)}
-        </div>
-      );
-    }
-
-    // Stage 3: CPT Code Mapping
-    function Stage3CPTMapping({ sections, sectionTrees, cptMappings, setCptMappings }) {
-      const [currentCPT, setCurrentCPT] = useState('');
-      const [isAddon, setIsAddon] = useState(false);
-      const [currentMappings, setCurrentMappings] = useState({ sections: [] });
-
-      const handleDragStart = (e, section) => {
-        e.dataTransfer.setData('sectionId', section.id);
-      };
-
-      const handleDrop = (e) => {
-        e.preventDefault();
-        const sectionId = e.dataTransfer.getData('sectionId');
-        if (!sectionId || currentMappings.sections.includes(sectionId)) return;
-        setCurrentMappings({ sections: [...currentMappings.sections, sectionId] });
-      };
-
-      const removeMapping = (sectionId) => {
-        setCurrentMappings({ sections: currentMappings.sections.filter(id => id !== sectionId) });
-      };
-
-      const resetForm = () => {
-        setCurrentCPT('');
-        setIsAddon(false);
-        setCurrentMappings({ sections: [] });
-      };
-
-      const saveCPTMapping = () => {
-        if (!currentCPT.trim()) return;
-        const mapping = {
-          cpt_code: currentCPT,
-          sections: currentMappings.sections,
-          is_addon: isAddon,
-          created_at: new Date().toISOString()
-        };
-        const existingIdx = cptMappings.findIndex(m => m.cpt_code === currentCPT);
-        if (existingIdx >= 0) {
-          const updated = [...cptMappings];
-          updated[existingIdx] = mapping;
-          setCptMappings(updated);
-        } else {
-          setCptMappings([...cptMappings, mapping]);
-        }
-        resetForm();
-      };
-
-      const loadMapping = (mapping) => {
-        setCurrentCPT(mapping.cpt_code);
-        setIsAddon(mapping.is_addon || false);
-        setCurrentMappings({ sections: mapping.sections || [] });
-      };
-
-      const deleteMapping = (cptCode) => {
-        setCptMappings(cptMappings.filter(m => m.cpt_code !== cptCode));
-      };
-
-      const getSectionById = (id) => sections.find(s => s.id === id);
-
-      return (
-        <div>
-          <InstructionsPanel title="Stage 3 Instructions: CPT Code Mapping">
-            <div className="space-y-3">
-              <p><strong>Goal:</strong> Map each CPT/HCPCS code from the policy's code table to its relevant requirement sections.</p>
-              <div>
-                <p className="font-medium mb-1">Steps:</p>
-                <ol className="list-decimal list-inside space-y-1 ml-2">
-                  <li>Find the CPT/HCPCS codes table in the policy document</li>
-                  <li>Enter the CPT code in the input box</li>
-                  <li>Drag all relevant sections from the middle panel into the Requirements drop zone</li>
-                  <li>Click "Save CPT Mapping"</li>
-                </ol>
-              </div>
-              <p className="text-blue-600 italic">💡 Tip: Map ALL sections that apply to this CPT code — ICD-10 filtering happens downstream at implementation time.</p>
-              <p className="text-orange-600 italic">➕ Add-on codes: If the CPT code is an add-on code (typically marked with "+" in the policy's code table), check the "Add-on code" box. The code will still be fully annotated — the flag is used to trigger a reminder during the checklist stage.</p>
-            </div>
-          </InstructionsPanel>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-4">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Saved Mappings</h2>
-              <div className="space-y-2 max-h-[700px] overflow-y-auto">
-                {cptMappings.length === 0 ? (
-                  <p className="text-sm text-gray-500 text-center py-4">No mappings yet</p>
-                ) : cptMappings.map(mapping => (
-                  <div key={mapping.cpt_code} className="p-2 bg-gray-50 rounded-lg border border-gray-200 group">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => loadMapping(mapping)} className="font-mono text-sm font-medium text-blue-600 hover:underline">{mapping.cpt_code}</button>
-                        {mapping.is_addon && <span className="text-xs bg-orange-100 text-orange-700 font-bold px-1.5 py-0.5 rounded" title="Add-on code">+</span>}
-                      </div>
-                      <button onClick={() => deleteMapping(mapping.cpt_code)} className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"><Trash2 size={14} /></button>
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {mapping.sections?.length || 0} section(s)
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="lg:col-span-3 bg-white rounded-xl border border-gray-200 p-4">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Available Sections</h2>
-              <p className="text-sm text-gray-600 mb-4">Drag sections to map them</p>
-              <div className="space-y-2 max-h-[650px] overflow-y-auto">
-                {sections.map((section) => (
-                  <div key={section.id} draggable onDragStart={(e) => handleDragStart(e, section)} className="p-3 rounded-lg border-2 border-gray-200 bg-gray-50 cursor-grab active:cursor-grabbing hover:shadow-md hover:border-gray-300 transition-shadow">
-                    <div className="flex items-center gap-2">
-                      <GripVertical size={16} className="text-gray-400 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <span className="font-mono text-xs font-bold bg-white px-2 py-0.5 rounded border border-gray-300 mb-1 inline-block">{section.id}</span>
-                        <p className="text-sm line-clamp-2 mt-1">{section.text}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="lg:col-span-7 bg-white rounded-xl border border-gray-200 p-4 max-h-[800px] overflow-y-auto">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">CPT Code Mapping</h2>
-
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">CPT/HCPCS Code</label>
-                <input type="text" value={currentCPT} onChange={(e) => setCurrentCPT(e.target.value.toUpperCase())} placeholder="Enter CPT code (e.g., 27447)" className="w-full px-4 py-2 border border-gray-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-500" />
-                <label className="flex items-center gap-2 mt-2 cursor-pointer w-fit">
-                  <input type="checkbox" checked={isAddon} onChange={(e) => setIsAddon(e.target.checked)} className="accent-orange-500 w-4 h-4" />
-                  <span className="text-sm text-gray-600">Add-on code <span className="font-mono font-bold text-orange-600">(+)</span></span>
-                </label>
-                {isAddon && (
-                  <div className="mt-2 flex items-start gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
-                    <span className="text-orange-500 text-base mt-0.5">⚠️</span>
-                    <p className="text-xs text-orange-800">This is an <strong>add-on code</strong> — it cannot be billed alone and must always accompany a primary procedure code. The checklist will display a reminder during PA preparation.</p>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Requirements</label>
-                <div onDragOver={(e) => e.preventDefault()} onDrop={handleDrop} className="min-h-[120px] border-2 border-dashed border-blue-300 bg-blue-50 rounded-lg p-2">
-                  {currentMappings.sections.length > 0 ? (
-                    <div className="space-y-1">
-                      {currentMappings.sections.map(sectionId => {
-                        const section = getSectionById(sectionId);
-                        return section ? (
-                          <div key={sectionId} className="flex items-center justify-between bg-white p-2 rounded text-sm border border-gray-200">
-                            <span className="font-mono text-xs font-bold mr-2 text-blue-700">{sectionId}</span>
-                            <span className="flex-1 truncate text-xs text-gray-700">{section.text}</span>
-                            <button onClick={() => removeMapping(sectionId)} className="text-red-500 ml-2 hover:text-red-700"><Trash2 size={12} /></button>
-                          </div>
-                        ) : null;
-                      })}
-                    </div>
-                  ) : <p className="text-center text-gray-400 text-xs py-4">Drag sections here to map them to this CPT code</p>}
+              {/* evidence accuracy */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className={`rounded-lg p-3 border ${sBg(sec.evidence_accuracy)} border-gray-200`}>
+                  <div className="text-xs font-semibold text-gray-600 mb-1">Evidence Type Accuracy</div>
+                  <div className={`text-2xl font-bold ${sColor(sec.evidence_accuracy)}`}>{pct(sec.evidence_accuracy)}</div>
                 </div>
               </div>
 
-              <button onClick={saveCPTMapping} disabled={!currentCPT.trim()} className={`w-full mt-4 py-3 rounded-lg font-medium ${currentCPT.trim() ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
-                Save CPT Mapping
-              </button>
-            </div>
-          </div>
-        </div>
-      );
-    }
+              {/* per-leaf ref vs pred evidence comparison */}
+              {(sec.ref_tree||sec.pred_tree)&&(
+                <LeafComparisonPanel
+                  rows={buildLeafRows(sec.ref_tree,sec.pred_tree)}
+                  resolveText={resolveText}/>
+              )}
 
-    // ── Expandable text helper ───────────────────────────────────────────────
-    function ExpandableText({ text, previewLength = 160, className = '' }) {
-      const [expanded, setExpanded] = useState(false);
-      if (!text) return <span className={`text-gray-400 italic ${className}`}>(none)</span>;
-      const needsTrunc = text.length > previewLength;
-      return (
-        <div className={className}>
-          <span className="whitespace-pre-wrap leading-relaxed">
-            {expanded || !needsTrunc ? text : text.slice(0, previewLength) + '…'}
-          </span>
-          {needsTrunc && (
-            <button onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
-              className="ml-1.5 text-indigo-500 hover:text-indigo-700 text-xs font-medium underline-offset-2 underline">
-              {expanded ? 'Show less' : 'Show more'}
-            </button>
-          )}
-        </div>
-      );
-    }
-
-    // ── Evaluation Report Viewer ────────────────────────────────────────────
-    function EvaluationReport() {
-      const [reportData, setReportData] = useState(null);
-      const [activeTab, setActiveTab] = useState('overview');
-      const [errorFilter, setErrorFilter] = useState('all');
-      const [expandedErrors, setExpandedErrors] = useState(new Set());
-
-      const importReport = (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          try {
-            const data = JSON.parse(e.target.result);
-            setReportData(data);
-            setActiveTab('overview');
-            setErrorFilter('all');
-            setExpandedErrors(new Set());
-          } catch (err) {
-            alert('Invalid JSON file. Please select a valid evaluation report.');
-          }
-        };
-        reader.readAsText(file);
-        event.target.value = '';
-      };
-
-      const pct = (v) => v == null ? '—' : `${(v * 100).toFixed(1)}%`;
-      const scoreColor = (v) => v == null ? 'text-gray-400' : v >= 0.8 ? 'text-green-700' : v >= 0.6 ? 'text-yellow-700' : 'text-red-700';
-      const scoreBg   = (v) => v == null ? 'bg-gray-50 border-gray-200' : v >= 0.8 ? 'bg-green-50 border-green-200' : v >= 0.6 ? 'bg-yellow-50 border-yellow-200' : 'bg-red-50 border-red-200';
-      const scoreBar  = (v) => v == null ? 'bg-gray-300' : v >= 0.8 ? 'bg-green-500' : v >= 0.6 ? 'bg-yellow-400' : 'bg-red-500';
-      const barW      = (v) => v == null ? '0%' : `${Math.min(100, (v * 100)).toFixed(1)}%`;
-
-      const ERR_COLORS = {
-        missed_section: 'bg-red-500', spurious_section: 'bg-orange-500',
-        missed_leaf: 'bg-pink-500', spurious_leaf: 'bg-amber-500',
-        operator_mismatch: 'bg-purple-500', evidence_mismatch: 'bg-blue-500',
-        time_sensitive_mismatch: 'bg-cyan-500',
-      };
-      const ERR_LABELS = {
-        missed_section: 'Missed Section', spurious_section: 'Extra Section',
-        missed_leaf: 'Missed Leaf', spurious_leaf: 'Extra Leaf',
-        operator_mismatch: 'Operator Mismatch', evidence_mismatch: 'Evidence Mismatch',
-        time_sensitive_mismatch: 'Time-Sensitive Mismatch',
-      };
-      const ERR_BADGE = {
-        missed_section: 'bg-red-100 text-red-800', spurious_section: 'bg-orange-100 text-orange-800',
-        missed_leaf: 'bg-pink-100 text-pink-800', spurious_leaf: 'bg-amber-100 text-amber-800',
-        operator_mismatch: 'bg-purple-100 text-purple-800', evidence_mismatch: 'bg-blue-100 text-blue-800',
-        time_sensitive_mismatch: 'bg-cyan-100 text-cyan-800',
-      };
-
-      if (!reportData) {
-        return (
-          <div className="flex flex-col items-center justify-center py-28 text-center">
-            <div className="text-7xl mb-4">📊</div>
-            <h2 className="text-xl font-semibold text-gray-700 mb-2">No Evaluation Report Loaded</h2>
-            <p className="text-sm text-gray-400 mb-8 max-w-sm">Import a JSON evaluation report to see a visual breakdown of annotation quality across all stages.</p>
-            <label className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 cursor-pointer font-medium shadow">
-              <Upload size={18} /> Import Evaluation Report
-              <input type="file" accept=".json" onChange={importReport} className="hidden" />
-            </label>
-          </div>
-        );
-      }
-
-      const s1 = reportData.stage1 || {};
-      const s2 = reportData.stage2 || {};
-      const iam = reportData.inter_annotator_agreement || {};
-      const errSummary = reportData.error_summary || {};
-      const errLog = reportData.error_log || [];
-      const perSection = s2.per_section || {};
-      const totalErrors = errSummary.total_entries || errLog.length;
-      const errTypes = errSummary.by_type || {};
-      const filteredErrors = errorFilter === 'all' ? errLog : errLog.filter(e => e.error_type === errorFilter);
-
-      const tabs = [
-        { id: 'overview',   label: '📋 Overview' },
-        { id: 'stage1',     label: `🗂 Stage 1: Sections` },
-        { id: 'stage2',     label: `🌿 Stage 2: Logic Trees` },
-        { id: 'errors',     label: `⚠️ Error Log (${totalErrors})` },
-        ...(iam.n_pairs ? [{ id: 'agreement', label: '🤝 Agreement' }] : []),
-      ];
-
-      const overviewCards = [
-        { label: 'Section F1',          value: s1.section_f1,                    sub: `P ${pct(s1.section_precision)} / R ${pct(s1.section_recall)}` },
-        { label: 'Leaf F1',             value: s2.macro_leaf_f1,                 sub: 'Logic tree text match' },
-        { label: 'Operator Accuracy',   value: s2.macro_operator_accuracy,       sub: 'ALL / ANY / NOT logic' },
-        { label: 'Evidence Accuracy',   value: s2.macro_evidence_accuracy,       sub: 'Evidence source labels' },
-        { label: 'Time-Sensitive Acc.', value: s2.macro_time_sensitive_accuracy, sub: 'Time flag correctness' },
-      ];
-
-      return (
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          {/* Header row */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="text-sm text-gray-400">Loaded report · {Object.keys(perSection).length} sections · {totalErrors} errors</div>
-            <label className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 cursor-pointer text-sm font-medium">
-              <Upload size={15} /> Load Different Report
-              <input type="file" accept=".json" onChange={importReport} className="hidden" />
-            </label>
-          </div>
-
-          {/* Tabs */}
-          <div className="flex gap-1 border-b border-gray-200 mb-6 overflow-x-auto pb-px">
-            {tabs.map(tab => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                className={`shrink-0 px-4 py-2 text-sm font-medium rounded-t-lg border border-transparent transition-all ${activeTab === tab.id ? 'border-gray-200 border-b-white bg-white -mb-px text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}>
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* ── OVERVIEW ────────────────────── */}
-          {activeTab === 'overview' && (
-            <div className="space-y-5">
-              {/* Score cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                {overviewCards.map(m => (
-                  <div key={m.label} className={`rounded-xl border p-4 ${scoreBg(m.value)}`}>
-                    <div className={`text-2xl font-bold ${scoreColor(m.value)}`}>{pct(m.value)}</div>
-                    <div className="text-xs font-semibold text-gray-700 mt-1 leading-tight">{m.label}</div>
-                    <div className="text-xs text-gray-400 mt-0.5">{m.sub}</div>
-                    <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${scoreBar(m.value)}`} style={{width: barW(m.value)}}></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Error breakdown */}
-              <div className="bg-white border border-gray-200 rounded-xl p-5">
-                <h3 className="text-sm font-semibold text-gray-900 mb-4">Error Breakdown <span className="text-gray-400 font-normal">({totalErrors} total)</span></h3>
-                <div className="space-y-2.5">
-                  {Object.entries(errTypes).sort((a,b) => b[1]-a[1]).map(([type, count]) => (
-                    <div key={type} className="flex items-center gap-3">
-                      <div className="w-44 text-xs text-gray-500 text-right truncate">{ERR_LABELS[type] || type}</div>
-                      <div className="flex-1 h-4 bg-gray-100 rounded overflow-hidden">
-                        <div className={`h-full ${ERR_COLORS[type] || 'bg-gray-400'} rounded`}
-                          style={{width: totalErrors ? `${(count/totalErrors)*100}%` : '0%'}}></div>
-                      </div>
-                      <div className="w-7 text-xs text-gray-700 font-semibold text-right">{count}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Stage mini-panels */}
+              {/* tree comparison — full text, no truncation */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="bg-white border border-gray-200 rounded-xl p-5">
-                  <h4 className="text-sm font-semibold text-gray-800 mb-3">Stage 1 — Section Coverage</h4>
-                  <div className="grid grid-cols-3 gap-1 text-center mb-2">
-                    {[
-                      ['Match',    s1.n_matched,                                                                                              'text-green-600'],
-                      ['Subset',   (s1.n_pred_in_ref ?? (s1.pred_in_ref || []).length) + (s1.n_ref_in_pred ?? (s1.ref_in_pred || []).length), 'text-yellow-600'],
-                      ['Mismatch', (s1.n_missed ?? (s1.unmatched_ref || []).length) + (s1.n_spurious ?? (s1.unmatched_pred || []).length),    'text-red-500'],
-                    ].map(([label, val, cls]) => (
-                      <div key={label}>
-                        <div className={`text-xl font-bold ${cls}`}>{val ?? 0}</div>
-                        <div className="text-xs text-gray-400 leading-tight">{label}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex justify-center gap-4 text-xs text-gray-400 border-t border-gray-100 pt-2 mt-1">
-                    <span>Ref sections: <span className="font-semibold text-gray-600">{s1.n_ref ?? ((s1.n_matched ?? 0) + (s1.n_pred_in_ref ?? 0) + (s1.n_ref_in_pred ?? 0) + (s1.n_missed ?? (s1.unmatched_ref || []).length))}</span></span>
-                    <span>Pred sections: <span className="font-semibold text-gray-600">{s1.n_pred ?? ((s1.n_matched ?? 0) + (s1.n_pred_in_ref ?? 0) + (s1.n_ref_in_pred ?? 0) + (s1.n_spurious ?? (s1.unmatched_pred || []).length))}</span></span>
-                  </div>
-                  <div className="mt-2 text-center text-xs text-gray-400">
-                    Avg text similarity: <span className="font-semibold text-gray-600">{pct(s1.mean_text_similarity)}</span>
-                  </div>
-                </div>
-                <div className="bg-white border border-gray-200 rounded-xl p-5">
-                  <h4 className="text-sm font-semibold text-gray-800 mb-3">Stage 2 — Logic Tree Quality</h4>
-                  <div className="space-y-2">
-                    {[['Leaf F1', s2.macro_leaf_f1], ['Operator Accuracy', s2.macro_operator_accuracy],
-                      ['Evidence Accuracy', s2.macro_evidence_accuracy], ['Time-Sensitive Acc.', s2.macro_time_sensitive_accuracy]
-                    ].map(([label, v]) => (
-                      <div key={label} className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500 w-40">{label}</span>
-                        <div className="flex-1 h-2 bg-gray-100 rounded overflow-hidden">
-                          <div className={`h-full rounded ${scoreBar(v)}`} style={{width: barW(v)}}></div>
-                        </div>
-                        <span className={`text-xs font-bold w-12 text-right ${scoreColor(v)}`}>{pct(v)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <TreeTextPanel treeStr={sec.ref_tree}  label="Reference Tree (Ground Truth)" labelColor="bg-blue-50 text-blue-800"/>
+                <TreeTextPanel treeStr={sec.pred_tree} label="Predicted Tree"                labelColor="bg-purple-50 text-purple-800"/>
               </div>
             </div>
           )}
+        </div>
+      );
+    }
 
-          {/* ── STAGE 1 ─────────────────────── */}
-          {activeTab === 'stage1' && (
-            <div className="space-y-4">
-              {/* Metric cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                {[['Precision', s1.section_precision], ['Recall', s1.section_recall],
-                  ['F1 Score', s1.section_f1], ['Text Similarity', s1.mean_text_similarity]].map(([label, v]) => (
-                  <div key={label} className={`rounded-xl border p-4 ${scoreBg(v)}`}>
-                    <div className={`text-2xl font-bold ${scoreColor(v)}`}>{pct(v)}</div>
-                    <div className="text-sm text-gray-600 mt-0.5">{label}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Count summary row */}
-              <div className="bg-white border border-gray-200 rounded-xl px-5 py-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-                <span className="text-gray-500">✅ Match: <strong className="text-green-700">{s1.n_matched ?? 0}</strong></span>
-                <span className="text-gray-500">⊂ Subset: <strong className="text-yellow-700">{(s1.n_pred_in_ref ?? (s1.pred_in_ref || []).length) + (s1.n_ref_in_pred ?? (s1.ref_in_pred || []).length)}</strong>
-                  <span className="text-xs text-gray-400 ml-1">(pred⊂ref: {s1.n_pred_in_ref ?? (s1.pred_in_ref || []).length} / ref⊂pred: {s1.n_ref_in_pred ?? (s1.ref_in_pred || []).length})</span>
-                </span>
-                <span className="text-gray-500">❌ Mismatch: <strong className="text-red-600">{(s1.n_missed ?? (s1.unmatched_ref || []).length) + (s1.n_spurious ?? (s1.unmatched_pred || []).length)}</strong>
-                  <span className="text-xs text-gray-400 ml-1">(missed: {s1.n_missed ?? (s1.unmatched_ref || []).length} / spurious: {s1.n_spurious ?? (s1.unmatched_pred || []).length})</span>
-                </span>
-                <span className="ml-auto text-xs text-gray-400 flex gap-3">
-                  <span>Ref: <strong className="text-gray-600">{s1.n_ref ?? ((s1.n_matched ?? 0) + (s1.n_pred_in_ref ?? 0) + (s1.n_ref_in_pred ?? 0) + (s1.n_missed ?? (s1.unmatched_ref || []).length))}</strong></span>
-                  <span>Pred: <strong className="text-gray-600">{s1.n_pred ?? ((s1.n_matched ?? 0) + (s1.n_pred_in_ref ?? 0) + (s1.n_ref_in_pred ?? 0) + (s1.n_spurious ?? (s1.unmatched_pred || []).length))}</strong></span>
-                </span>
-              </div>
-
-              {/* ✅ Matched */}
-              {(s1.matches || []).length > 0 && (
-                <div className="bg-white border border-gray-200 rounded-xl p-5">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-3">✅ Matched Sections ({(s1.matches || []).length})</h3>
-                  <div className="space-y-3">
-                    {(s1.matches || []).map((m, i) => (
-                      <div key={i} className="border border-gray-100 rounded-lg p-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="font-mono bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs">{m.pred_id}</span>
-                          <span className="text-gray-300 text-xs">↔</span>
-                          <span className="font-mono bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs">{m.ref_id}</span>
-                          <span className={`ml-auto text-xs font-semibold ${scoreColor(m.similarity)}`}>{pct(m.similarity)}</span>
-                        </div>
-                        <ExpandableText text={m.pred_text} className="text-xs text-gray-500" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ⊂ Subset Sections: pred ⊂ ref */}
-              {(s1.pred_in_ref || []).length > 0 && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-5">
-                  <h3 className="text-sm font-semibold text-yellow-900 mb-1">⊂ Subset Sections: pred_id ⊂ ref_id ({(s1.pred_in_ref || []).length})</h3>
-                  <p className="text-xs text-yellow-700 mb-3">Prediction is contained within the reference — annotator under-extracted or split the section.</p>
-                  <div className="space-y-3">
-                    {(s1.pred_in_ref || []).map((m, i) => (
-                      <div key={i} className="bg-white rounded-lg p-3 border border-yellow-200">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="font-mono bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs">{m.pred_id}</span>
-                          <span className="text-yellow-500 text-xs font-bold">⊂</span>
-                          <span className="font-mono bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs">{m.ref_id}</span>
-                          {(m.partial_sim ?? m.similarity) != null && <span className={`ml-auto text-xs font-semibold ${scoreColor(m.partial_sim ?? m.similarity)}`}>partial: {pct(m.partial_sim ?? m.similarity)}</span>}
-                        </div>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-                          <div>
-                            <div className="text-xs font-semibold text-gray-400 mb-1">Prediction (fragment)</div>
-                            <ExpandableText text={m.pred_text} className="text-xs text-gray-600 bg-blue-50 rounded p-2" />
-                          </div>
-                          <div>
-                            <div className="text-xs font-semibold text-gray-400 mb-1">Reference (full)</div>
-                            <ExpandableText text={m.ref_text} className="text-xs text-gray-600 bg-green-50 rounded p-2" />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ⊂ Subset Sections: ref ⊂ pred */}
-              {(s1.ref_in_pred || []).length > 0 && (
-                <div className="bg-purple-50 border border-purple-200 rounded-xl p-5">
-                  <h3 className="text-sm font-semibold text-purple-900 mb-1">⊂ Subset Sections: ref_id ⊂ pred_id ({(s1.ref_in_pred || []).length})</h3>
-                  <p className="text-xs text-purple-700 mb-3">Reference is contained within the prediction — annotator over-merged multiple sections into one.</p>
-                  <div className="space-y-3">
-                    {(s1.ref_in_pred || []).map((m, i) => (
-                      <div key={i} className="bg-white rounded-lg p-3 border border-purple-200">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="font-mono bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs">{m.ref_id}</span>
-                          <span className="text-purple-500 text-xs font-bold">⊂</span>
-                          <span className="font-mono bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs">{m.pred_id}</span>
-                          {(m.partial_sim ?? m.similarity) != null && <span className={`ml-auto text-xs font-semibold ${scoreColor(m.partial_sim ?? m.similarity)}`}>partial: {pct(m.partial_sim ?? m.similarity)}</span>}
-                        </div>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-                          <div>
-                            <div className="text-xs font-semibold text-gray-400 mb-1">Reference (fragment)</div>
-                            <ExpandableText text={m.ref_text} className="text-xs text-gray-600 bg-green-50 rounded p-2" />
-                          </div>
-                          <div>
-                            <div className="text-xs font-semibold text-gray-400 mb-1">Prediction (merged)</div>
-                            <ExpandableText text={m.pred_text} className="text-xs text-gray-600 bg-blue-50 rounded p-2" />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ❌ Missed */}
-              {((s1.unmatched_ref || []).length > 0 || s1.n_missed > 0) && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-5">
-                  <h3 className="text-sm font-semibold text-red-900 mb-3">❌ Missed Sections <span className="font-normal text-red-600">(in reference, not found in annotation)</span> — {s1.n_missed ?? (s1.unmatched_ref || []).length}</h3>
-                  <div className="space-y-2">
-                    {(s1.unmatched_ref || []).map((sec, i) => (
-                      <div key={i} className="bg-white rounded-lg p-3 border border-red-100">
-                        <div className="font-mono text-xs text-red-700 font-bold mb-1">{sec.id}</div>
-                        <ExpandableText text={sec.text} className="text-xs text-gray-500" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ⚠️ Spurious */}
-              {((s1.unmatched_pred || []).length > 0 || s1.n_spurious > 0) && (
-                <div className="bg-orange-50 border border-orange-200 rounded-xl p-5">
-                  <h3 className="text-sm font-semibold text-orange-900 mb-3">⚠️ Spurious Sections <span className="font-normal text-orange-600">(in annotation, not in reference)</span> — {s1.n_spurious ?? (s1.unmatched_pred || []).length}</h3>
-                  <div className="space-y-2">
-                    {(s1.unmatched_pred || []).map((sec, i) => (
-                      <div key={i} className="bg-white rounded-lg p-3 border border-orange-100">
-                        <div className="font-mono text-xs text-orange-700 font-bold mb-1">{sec.id}</div>
-                        <ExpandableText text={sec.text} className="text-xs text-gray-500" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── STAGE 2 ─────────────────────── */}
-          {activeTab === 'stage2' && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                {[['Leaf F1', s2.macro_leaf_f1, 'Req. text matching'],
-                  ['Operator Accuracy', s2.macro_operator_accuracy, 'ALL/ANY/NOT logic'],
-                  ['Evidence Accuracy', s2.macro_evidence_accuracy, 'Evidence source labels'],
-                  ['Time-Sensitive Acc.', s2.macro_time_sensitive_accuracy, 'Time flag correctness']].map(([label, v, sub]) => (
-                  <div key={label} className={`rounded-xl border p-4 ${scoreBg(v)}`}>
-                    <div className={`text-2xl font-bold ${scoreColor(v)}`}>{pct(v)}</div>
-                    <div className="text-sm font-medium text-gray-700 mt-0.5">{label}</div>
-                    <div className="text-xs text-gray-400">{sub}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                <div className="px-5 py-3 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
-                  <h3 className="text-sm font-semibold text-gray-900">Per-Section Breakdown</h3>
-                  <span className="text-xs text-gray-400">({Object.keys(perSection).length} sections)</span>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-gray-100">
-                        {['Section', 'Leaf P', 'Leaf R', 'Leaf F1', 'Operator', 'Evidence', 'Time-Sens.'].map(h => (
-                          <th key={h} className={`px-4 py-2 font-semibold text-gray-500 ${h === 'Section' ? 'text-left' : 'text-center'}`}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.values(perSection).map((s, i) => (
-                        <tr key={s.section_id} className={`border-b border-gray-50 ${i % 2 ? 'bg-gray-50/40' : ''}`}>
-                          <td className="px-4 py-2 font-mono font-bold text-indigo-700">{s.section_id}</td>
-                          {[s.leaf_precision, s.leaf_recall, s.leaf_f1, s.operator_accuracy, s.evidence_accuracy, s.time_sensitive_accuracy].map((v, j) => (
-                            <td key={j} className={`px-4 py-2 text-center font-semibold ${scoreColor(v)}`}>{pct(v)}</td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── ERROR LOG ───────────────────── */}
-          {activeTab === 'errors' && (
-            <div>
-              {/* Filter chips */}
-              <div className="flex items-center gap-2 mb-4 flex-wrap">
-                <span className="text-xs text-gray-400 mr-1">Filter:</span>
-                <button onClick={() => setErrorFilter('all')}
-                  className={`px-3 py-1 rounded-full text-xs font-medium ${errorFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                  All ({totalErrors})
-                </button>
-                {Object.entries(errTypes).sort((a,b) => b[1]-a[1]).map(([type, count]) => (
-                  <button key={type} onClick={() => setErrorFilter(type)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium ${errorFilter === type ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                    {ERR_LABELS[type] || type} ({count})
-                  </button>
-                ))}
-              </div>
-
-              {/* Error cards */}
-              <div className="space-y-2">
-                {filteredErrors.map((err, i) => {
-                  const isExp = expandedErrors.has(i);
-                  return (
-                    <div key={i} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                      <button className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
-                        onClick={() => {
-                          const next = new Set(expandedErrors);
-                          isExp ? next.delete(i) : next.add(i);
-                          setExpandedErrors(next);
-                        }}>
-                        <span className={`shrink-0 px-2 py-0.5 rounded text-xs font-medium ${err.stage === 'stage1' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>{err.stage}</span>
-                        {err.section_id && <span className="font-mono text-xs text-indigo-700 font-bold">{err.section_id}</span>}
-                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${ERR_BADGE[err.error_type] || 'bg-gray-100 text-gray-700'}`}>{ERR_LABELS[err.error_type] || err.error_type}</span>
-                        {err.similarity != null && <span className={`ml-auto text-xs font-semibold ${scoreColor(err.similarity)}`}>{pct(err.similarity)}</span>}
-                        <ChevronDown size={14} className={`text-gray-400 transition-transform shrink-0 ${isExp ? 'rotate-180' : ''}`} />
-                      </button>
-                      {isExp && (
-                        <div className="px-4 pb-4 pt-3 border-t border-gray-100 grid grid-cols-1 lg:grid-cols-2 gap-3">
-                          <div>
-                            <div className="text-xs font-semibold text-gray-500 mb-1.5">📗 Reference (expected)</div>
-                            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{err.ref_text || '(none)'}</div>
-                          </div>
-                          <div>
-                            <div className="text-xs font-semibold text-gray-500 mb-1.5">📙 Prediction (annotator)</div>
-                            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{err.pred_text || '(none — not found)'}</div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+    /* ── PER-LEAF REF vs PRED COMPARISON (parsed from tree strings) ── */
+    function EvBadge({ev,bad}){
+      if(!ev||ev.length===0)return<span className="text-gray-300 text-xs">—</span>;
+      return(<div className="flex flex-wrap gap-1 justify-center">
+        {ev.map((e,i)=>(
+          <span key={i} className={`inline-block px-1.5 py-0.5 rounded text-xs font-mono whitespace-nowrap ${bad?'bg-red-100 text-red-700 font-semibold':'bg-blue-50 text-blue-700'}`}>{e}</span>
+        ))}
+      </div>);
+    }
+    function LeafComparisonPanel({rows,resolveText}){
+      if(!rows||rows.length===0)return<div className="text-xs text-gray-400 italic py-2">No leaf data parsed from trees.</div>;
+      const evBad=rows.filter(r=>r.type==='matched'&&!r.evMatch).length;
+      const missed=rows.filter(r=>r.type==='missed').length;
+      const extra=rows.filter(r=>r.type==='extra').length;
+      return(
+        <div>
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <span className="text-xs font-semibold text-gray-700">Per-Leaf Ref vs Pred</span>
+            {missed>0&&<span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded-full">{missed} missed leaf{missed>1?'s':''}</span>}
+            {extra>0&&<span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full">{extra} extra leaf{extra>1?'s':''}</span>}
+            {evBad>0&&<span className="text-xs px-2 py-0.5 bg-rose-100 text-rose-700 rounded-full">{evBad} evidence mismatch{evBad>1?'es':''}</span>}
+            {evBad===0&&missed===0&&extra===0&&<span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full">All match ✓</span>}
+          </div>
+          <div className="rounded-lg border border-gray-200 overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="px-2 py-2 text-left text-gray-500 font-semibold w-6">#</th>
+                  <th className="px-3 py-2 text-left text-gray-500 font-semibold">Leaf Requirement</th>
+                  <th className="px-3 py-2 text-center text-blue-600 font-semibold whitespace-nowrap">Ref Evidence</th>
+                  <th className="px-3 py-2 text-center text-purple-600 font-semibold whitespace-nowrap">Pred Evidence</th>
+                  <th className="px-2 py-2 text-center text-gray-400 font-semibold w-6">Ev</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row,i)=>{
+                  let rowBg='bg-green-50';
+                  if(row.type==='missed')rowBg='bg-red-50';
+                  else if(row.type==='extra')rowBg='bg-orange-50';
+                  else if(!row.evMatch)rowBg='bg-yellow-50';
+                  const refTxt=resolveText?resolveText(row.refText||''):row.refText||'';
+                  const predTxt=resolveText?resolveText(row.predText||''):row.predText||'';
+                  return(
+                    <tr key={i} className={`border-b border-gray-100 ${rowBg}`}>
+                      <td className="px-2 py-2 text-gray-400 font-mono align-top text-center">{i+1}</td>
+                      <td className="px-3 py-2 align-top" style={{minWidth:'220px',maxWidth:'420px',wordBreak:'break-word'}}>
+                        {row.type==='matched'&&<>
+                          {refTxt&&<div className="text-gray-800 mb-0.5" style={{whiteSpace:'pre-wrap'}}>{refTxt}</div>}
+                          {predTxt&&predTxt!==refTxt&&<div className="text-purple-700 text-xs mt-1 italic" style={{whiteSpace:'pre-wrap'}}>pred: {predTxt}</div>}
+                        </>}
+                        {row.type==='missed'&&<div className="text-red-700" style={{whiteSpace:'pre-wrap'}}><span className="font-semibold">MISSED: </span>{refTxt||row.refText}</div>}
+                        {row.type==='extra'&&<div className="text-orange-700" style={{whiteSpace:'pre-wrap'}}><span className="font-semibold">EXTRA: </span>{predTxt||row.predText}</div>}
+                      </td>
+                      <td className="px-3 py-2 align-top text-center"><EvBadge ev={row.refEv} bad={!row.evMatch&&row.type==='matched'}/></td>
+                      <td className="px-3 py-2 align-top text-center"><EvBadge ev={row.predEv} bad={!row.evMatch&&row.type==='matched'}/></td>
+                      <td className={`px-2 py-2 text-center text-base align-top font-bold ${row.evMatch?'text-green-500':'text-red-500'}`}>{row.type==='matched'?(row.evMatch?'✓':'✗'):'—'}</td>
+                    </tr>
                   );
                 })}
-                {filteredErrors.length === 0 && (
-                  <div className="text-center py-12 text-gray-400">No errors in this category 🎉</div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ── INTER-ANNOTATOR AGREEMENT ───── */}
-          {activeTab === 'agreement' && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                {[['Section F1', iam.mean_stage1_section_f1], ['Leaf F1', iam.mean_stage2_leaf_f1],
-                  ['Operator Acc.', iam.mean_stage2_operator_accuracy], ['CPT Code F1', iam.mean_stage3_code_f1],
-                  ['Link Jaccard', iam.mean_stage3_section_link_jaccard]].map(([label, v]) => (
-                  <div key={label} className={`rounded-xl border p-4 ${scoreBg(v)}`}>
-                    <div className={`text-2xl font-bold ${scoreColor(v)}`}>{pct(v)}</div>
-                    <div className="text-xs font-semibold text-gray-600 mt-1">{label}</div>
-                    <div className="text-xs text-gray-400">Mean across {iam.n_pairs} pair{iam.n_pairs > 1 ? 's' : ''}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                <div className="px-5 py-3 bg-gray-50 border-b border-gray-200">
-                  <h3 className="text-sm font-semibold text-gray-900">Annotator Pairs</h3>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-gray-100">
-                        {['Annotator A', 'Annotator B', 'Section F1', 'Leaf F1', 'Operator Acc.', 'CPT F1', 'Link Jaccard'].map(h => (
-                          <th key={h} className={`px-4 py-2 font-semibold text-gray-500 ${h.startsWith('Annotator') ? 'text-left' : 'text-center'}`}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(iam.pairs || []).map((p, i) => (
-                        <tr key={i} className="border-b border-gray-50">
-                          <td className="px-4 py-2 font-medium text-gray-700">{p.annotator_a}</td>
-                          <td className="px-4 py-2 font-medium text-gray-700">{p.annotator_b}</td>
-                          {[p.stage1_section_f1, p.stage2_leaf_f1, p.stage2_operator_accuracy, p.stage3_code_f1, p.stage3_link_jaccard].map((v, j) => (
-                            <td key={j} className={`px-4 py-2 text-center font-bold ${scoreColor(v)}`}>{pct(v)}</td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
+              </tbody>
+            </table>
+          </div>
         </div>
       );
     }
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<AnnotationTool />);
+    /* ═══════════════════════════════════════════════
+       MAIN ANNOTATION TOOL (unchanged 3-stage flow)
+    ═══════════════════════════════════════════════ */
+    function AnnotationTool(){
+      const [stage,setStage]=useState(1);
+      const [docTitle,setDocTitle]=useState('');
+      const [sections,setSections]=useState([]);
+      const [trees,setTrees]=useState({});
+      const [cpts,setCpts]=useState([]);
+      const [customLOBs,setCustomLOBs]=useState([]);
+      const [annotNotes,setAnnotNotes]=useState('');
+      const [appFeedback,setAppFeedback]=useState('');
+      const [showNotes,setShowNotes]=useState(false);
+      const [reportData,setReportData]=useState(null);
+      const [showReport,setShowReport]=useState(false);
+
+      const allLOBs=[...DEFAULT_LOBS,...customLOBs];
+      const addLOB=l=>{if(l&&!allLOBs.includes(l))setCustomLOBs([...customLOBs,l]);};
+      const canNext=()=>{if(stage===1)return sections.length>0&&docTitle.trim()!=='';if(stage===2)return Object.keys(trees).length>0;return true;};
+
+      const exportData=()=>{
+        const se={general:[],supplementary:[],exception:[]};
+        sections.forEach(s=>se[s.type].push({id:s.id,text:s.text}));
+        const te={};Object.keys(trees).forEach(sid=>{const t=trees[sid];if(t)te[sid]=toExport(t);});
+        const ce={};cpts.forEach(m=>{ce[m.cpt_code]={general:m.general||[],supplementary:m.supplementary||[],exception:m.exception||[],code_table_entries:m.code_table_entries||[]};});
+        const ts=new Date().toISOString();const fp=docTitle.replace(/\s+/g,'_')||'annotation';
+        const dl=(d,n)=>{const b=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=n;a.click();URL.revokeObjectURL(u);};
+        dl({document_title:docTitle,sections:se,logic_trees:te,cpt_mappings:ce,custom_labels:{lobs:customLOBs},exported_at:ts},`${fp}_annotation.json`);
+        if(annotNotes.trim()||appFeedback.trim())setTimeout(()=>dl({document_title:docTitle,annotator_notes:annotNotes,app_feedback:appFeedback,exported_at:ts},`${fp}_feedback.json`),500);
+      };
+
+      const importAnnot=e=>{
+        const f=e.target.files[0];if(!f)return;
+        const r=new FileReader();
+        r.onload=ev=>{
+          try{
+            const d=JSON.parse(ev.target.result);
+            if(d.document_title)setDocTitle(d.document_title);
+            if(d.sections){const imp=[];['general','supplementary','exception'].forEach(t=>(d.sections[t]||[]).forEach(s=>imp.push({id:s.id,text:s.text,type:t,created_at:new Date().toISOString()})));setSections(imp);}
+            if(d.logic_trees){const t={};Object.keys(d.logic_trees).forEach(sid=>{t[sid]=importTree(d.logic_trees[sid]);});setTrees(t);}
+            if(d.cpt_mappings){const m=[];Object.keys(d.cpt_mappings).forEach(c=>{const mp=d.cpt_mappings[c];m.push({cpt_code:c,...mp,created_at:new Date().toISOString()});});setCpts(m);}
+            if(d.custom_labels?.lobs)setCustomLOBs(d.custom_labels.lobs);
+            if(d.annotator_notes)setAnnotNotes(d.annotator_notes);
+            if(d.app_feedback)setAppFeedback(d.app_feedback);
+            alert('Imported!');
+          }catch(err){alert('Import failed');console.error(err);}
+        };r.readAsText(f);e.target.value='';
+      };
+      const importTree=n=>{if(!n)return null;const id=`node_${Date.now()}_${Math.random().toString(36).substr(2,9)}`;if(n.type==='leaf')return{id,type:'leaf',text:n.text||'',children:[],evidence_source:n.evidence_source||''};return{id,type:n.type,text:'',children:(n.children||[]).map(importTree).filter(Boolean),evidence_source:''};};
+
+      const importReport=e=>{
+        const f=e.target.files[0];if(!f)return;
+        const r=new FileReader();
+        r.onload=ev=>{
+          try{
+            const d=JSON.parse(ev.target.result);
+            if(!d.stage1&&!d.stage2)throw new Error('Not a valid report file');
+            setReportData(d);setShowReport(true);
+          }catch(err){alert('Report load failed: '+err.message);}
+        };r.readAsText(f);e.target.value='';
+      };
+
+      /* Show report viewer instead of annotation tool */
+      if(showReport&&reportData)return<ReportViewer reportData={reportData} onBack={()=>setShowReport(false)}/>;
+
+      const stageNames=['Section Extraction','Atomic Breakdown','CPT Mapping'];
+
+      return(
+        <div className="min-h-screen bg-gray-50">
+          {/* HEADER */}
+          <header className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-30">
+            <div className="max-w-7xl mx-auto flex items-center justify-between flex-wrap gap-3">
+              <h1 className="text-xl font-bold text-gray-900">Policy Annotation Tool</h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button onClick={()=>setShowNotes(!showNotes)} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm ${showNotes?'bg-purple-100 text-purple-700':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}><MsgI s={15}/> Notes</button>
+                <label className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer text-sm"><UpI s={15}/> Import<input type="file" accept=".json" onChange={importAnnot} className="hidden"/></label>
+                <label className={`flex items-center gap-1.5 px-3 py-2 rounded-lg cursor-pointer text-sm ${reportData?'bg-teal-600 text-white hover:bg-teal-700':'bg-teal-100 text-teal-800 hover:bg-teal-200'}`}>
+                  <BarI s={15}/>{reportData?'View Report':'Load Report'}
+                  {reportData&&<button onClick={e=>{e.preventDefault();setShowReport(true);}} className="ml-1 underline text-xs" title="Click to view loaded report">↗</button>}
+                  {!reportData&&<input type="file" accept=".json" onChange={importReport} className="hidden"/>}
+                </label>
+                {reportData&&<label className="flex items-center gap-1 px-2 py-2 text-xs text-teal-700 bg-teal-50 rounded-lg cursor-pointer hover:bg-teal-100">Reload<input type="file" accept=".json" onChange={importReport} className="hidden"/></label>}
+                <button onClick={exportData} className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"><DlI s={15}/> Export</button>
+              </div>
+            </div>
+
+            {/* stage progress bar */}
+            <div className="max-w-7xl mx-auto mt-3 flex items-center gap-2">
+              {stageNames.map((name,idx)=>{
+                const sid=idx+1;
+                return(<React.Fragment key={sid}>
+                  <button onClick={()=>setStage(sid)} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-all ${stage===sid?'bg-blue-100 text-blue-700 font-semibold':stage>sid?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                    <span className={`w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center ${stage===sid?'bg-blue-600 text-white':stage>sid?'bg-green-600 text-white':'bg-gray-300 text-gray-600'}`}>{sid}</span>
+                    <span className="hidden sm:inline">{name}</span>
+                  </button>
+                  {idx<stageNames.length-1&&<div className={`h-0.5 w-8 rounded ${stage>sid?'bg-green-400':'bg-gray-200'}`}/>}
+                </React.Fragment>);
+              })}
+            </div>
+          </header>
+
+          {/* NOTES PANEL */}
+          {showNotes&&(
+            <div className="max-w-7xl mx-auto px-6 py-4">
+              <div className="bg-purple-50 border border-purple-200 rounded-xl p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-sm font-semibold text-purple-900 flex items-center gap-2"><MsgI s={16}/> Notes &amp; Feedback</h2>
+                  <button onClick={()=>setShowNotes(false)} className="text-purple-600 hover:text-purple-800 text-sm">Close</button>
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div><label className="block text-xs font-medium text-purple-800 mb-1.5">Annotator Notes</label><textarea value={annotNotes} onChange={e=>setAnnotNotes(e.target.value)} rows={5} className="w-full px-3 py-2 border border-purple-300 rounded-lg text-sm resize-none bg-white focus:ring-2 focus:ring-purple-400"/></div>
+                  <div><label className="block text-xs font-medium text-purple-800 mb-1.5">App Feedback</label><textarea value={appFeedback} onChange={e=>setAppFeedback(e.target.value)} rows={5} className="w-full px-3 py-2 border border-purple-300 rounded-lg text-sm resize-none bg-white focus:ring-2 focus:ring-purple-400"/></div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* DOCUMENT TITLE */}
+          <div className="max-w-7xl mx-auto px-6 pt-4">
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Document Title <span className="text-red-500">*</span></label>
+              <input type="text" value={docTitle} onChange={e=>setDocTitle(e.target.value)} placeholder="e.g., Aetna CPB 0743 - Spinal Surgery" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"/>
+            </div>
+          </div>
+
+          {/* STAGE CONTENT */}
+          <main className="max-w-7xl mx-auto px-6 py-4 pb-24">
+            {stage===1&&<Stage1 sections={sections} setSections={setSections}/>}
+            {stage===2&&<Stage2 sections={sections} trees={trees} setTrees={setTrees}/>}
+            {stage===3&&<Stage3 sections={sections} trees={trees} cpts={cpts} setCpts={setCpts} allLOBs={allLOBs} addLOB={addLOB}/>}
+          </main>
+
+          {/* FOOTER NAV */}
+          <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-3 z-20">
+            <div className="max-w-7xl mx-auto flex justify-between items-center">
+              <button onClick={()=>setStage(Math.max(1,stage-1))} disabled={stage===1} className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm ${stage===1?'bg-gray-100 text-gray-300 cursor-not-allowed':'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}><ArrL s={16}/> Previous</button>
+              <span className="text-xs text-gray-400">{sections.length} sections · {Object.keys(trees).length} trees · {cpts.length} CPT codes</span>
+              <button onClick={()=>setStage(Math.min(3,stage+1))} disabled={stage===3||!canNext()} className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm ${stage===3||!canNext()?'bg-gray-100 text-gray-300 cursor-not-allowed':'bg-blue-600 text-white hover:bg-blue-700'}`}>Next <ArrR s={16}/></button>
+            </div>
+          </footer>
+        </div>
+      );
+    }
+
+    /* ── STAGE 1 ── */
+    function Stage1({sections,setSections}){
+      const [text,setText]=useState('');const [type,setType]=useState('general');const [editId,setEditId]=useState(null);
+      const tc={general:'bg-blue-100 text-blue-800 border-blue-200',supplementary:'bg-purple-100 text-purple-800 border-purple-200',exception:'bg-orange-100 text-orange-800 border-orange-200'};
+      const add=()=>{if(!text.trim())return;if(editId){setSections(sections.map(s=>s.id===editId?{...s,text,type}:s));setEditId(null);}else setSections([...sections,{id:genId(type,sections),text,type,created_at:new Date().toISOString()}]);setText('');setType('general');};
+      const edit=s=>{setText(s.text);setType(s.type);setEditId(s.id);};
+      const del=id=>{setSections(sections.filter(s=>s.id!==id));if(editId===id){setEditId(null);setText('');}};
+      return(<div>
+        <InstrPanel title="Stage 1: Section-level Requirement Extraction">
+          <ol className="list-decimal list-inside space-y-1 ml-2"><li>Open the policy document in a separate tab</li><li>Copy a full requirement section</li><li>Paste below, pick type, click Add</li><li>Repeat for all sections</li></ol>
+          <div className="mt-2 flex gap-3 flex-wrap text-xs">
+            <span><span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded font-medium">General</span> primary criteria</span>
+            <span><span className="px-1.5 py-0.5 bg-purple-100 text-purple-800 rounded font-medium">Supplementary</span> definitions/docs</span>
+            <span><span className="px-1.5 py-0.5 bg-orange-100 text-orange-800 rounded font-medium">Exception</span> exclusions/waivers</span>
+          </div>
+        </InstrPanel>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+            <h2 className="text-base font-semibold text-gray-900">{editId?'Edit Section':'Add Section'}</h2>
+            <div className="flex gap-2">{['general','supplementary','exception'].map(t=><button key={t} onClick={()=>setType(t)} className={`flex-1 py-2 text-xs font-medium rounded-lg border-2 capitalize ${type===t?tc[t]+' border-current':'border-gray-200 text-gray-500'}`}>{t}</button>)}</div>
+            <textarea value={text} onChange={e=>setText(e.target.value)} placeholder="Paste section text..." rows={10} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:ring-2 focus:ring-blue-500"/>
+            <div className="flex gap-3">
+              <button onClick={add} disabled={!text.trim()} className={`flex-1 py-2.5 rounded-lg text-sm font-medium ${text.trim()?'bg-blue-600 text-white hover:bg-blue-700':'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>{editId?'Update':'Add Section'}</button>
+              {editId&&<button onClick={()=>{setEditId(null);setText('');setType('general');}} className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg text-sm">Cancel</button>}
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h2 className="text-base font-semibold text-gray-900 mb-4">Sections ({sections.length})</h2>
+            {sections.length===0?<div className="text-center py-10 text-gray-400"><LayersI s={40} c="mx-auto mb-3 opacity-30"/><p className="text-sm">None yet.</p></div>:(
+              <div className="space-y-2 max-h-[580px] overflow-y-auto">
+                {sections.map(s=>(
+                  <div key={s.id} className={`p-3 rounded-lg border-2 ${tc[s.type]}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1"><span className="font-mono text-xs font-bold bg-white/50 px-1.5 py-0.5 rounded">{s.id}</span><span className="text-xs font-semibold uppercase">{s.type}</span></div>
+                        <p className="text-sm whitespace-pre-wrap line-clamp-4">{s.text}</p>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <button onClick={()=>edit(s)} className="p-1.5 hover:bg-white/50 rounded"><FileI s={14}/></button>
+                        <button onClick={()=>del(s.id)} className="p-1.5 hover:bg-white/50 rounded text-red-600"><TrashI s={14}/></button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>);
+    }
+
+    /* ── STAGE 2 ── */
+    function Stage2({sections,trees,setTrees}){
+      const [selId,setSelId]=useState(sections.length>0?sections[0].id:null);
+      const cur=sections.find(s=>s.id===selId);
+      const tc={general:'bg-blue-100 text-blue-800 border-blue-200',supplementary:'bg-purple-100 text-purple-800 border-purple-200',exception:'bg-orange-100 text-orange-800 border-orange-200'};
+      return(<div>
+        <InstrPanel title="Stage 2: Break Sections into Atomic Items">
+          <ol className="list-decimal list-inside space-y-1 ml-2"><li>Select a section on the left</li><li>Add atomic requirements to the tree builder</li><li>Set operators (ALL/ANY/NOT) and per-leaf fields</li><li>Mark the evidence source for each leaf</li></ol>
+        </InstrPanel>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-3 bg-white rounded-xl border border-gray-200 p-4">
+            <h2 className="text-base font-semibold text-gray-900 mb-3">Sections</h2>
+            <div className="space-y-1.5 max-h-[600px] overflow-y-auto">
+              {sections.map(s=>(
+                <button key={s.id} onClick={()=>setSelId(s.id)} className={`w-full text-left p-2.5 rounded-lg border-2 ${selId===s.id?'ring-2 ring-blue-500 '+tc[s.type]:'border-gray-200 hover:border-gray-300'}`}>
+                  <div className="flex items-center justify-between"><span className="font-mono text-sm font-bold">{s.id}</span>{trees[s.id]&&<span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">✓</span>}</div>
+                  <span className={`text-xs capitalize ${tc[s.type].split(' ')[1]}`}>{s.type}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="lg:col-span-4 bg-white rounded-xl border border-gray-200 p-4">
+            <h2 className="text-base font-semibold text-gray-900 mb-3">Section Content</h2>
+            {cur?<div className={`p-3 rounded-lg border ${tc[cur.type]} max-h-[600px] overflow-y-auto`}>
+              <span className="font-mono text-xs font-bold bg-white/50 px-2 py-0.5 rounded mb-2 inline-block">{cur.id}</span>
+              <p className="text-sm whitespace-pre-wrap select-all mt-2">{cur.text}</p>
+            </div>:<p className="text-gray-400 text-center py-8 text-sm">Select a section</p>}
+          </div>
+          <div className="lg:col-span-5 bg-white rounded-xl border border-gray-200 p-4">
+            <h2 className="text-base font-semibold text-gray-900 mb-3">Logic Tree Builder</h2>
+            {selId&&<TreeBuilder tree={trees[selId]||null} setTree={t=>setTrees({...trees,[selId]:t})}/>}
+          </div>
+        </div>
+      </div>);
+    }
+
+    /* ── TREE BUILDER ── */
+    function TreeBuilder({tree,setTree}){
+      const [newText,setNewText]=useState('');
+      const ops=['ALL','ANY','NOT','IF','UNLESS'];
+      const mkNode=(type,children=[],text='')=>({id:`node_${Date.now()}_${Math.random().toString(36).substr(2,9)}`,type,text,children,evidence_source:''});
+      const addLeaf=()=>{if(!newText.trim())return;if(!tree)setTree(mkNode('ALL',[mkNode('leaf',[],newText)]));else setTree({...tree,children:[...tree.children,mkNode('leaf',[],newText)]});setNewText('');};
+      const wrap=op=>{if(!tree)setTree(mkNode(op,[]));else setTree(mkNode(op,[tree]));};
+      const upd=(id,u)=>{const f=n=>{if(n.id===id)return{...n,...u};if(n.children)return{...n,children:n.children.map(f)};return n;};setTree(f(tree));};
+      const del=id=>{const f=n=>{if(n.id===id)return null;if(n.children)return{...n,children:n.children.map(f).filter(Boolean)};return n;};setTree(f(tree));};
+      const addChild=(pid,c)=>{const f=n=>{if(n.id===pid)return{...n,children:[...(n.children||[]),c]};if(n.children)return{...n,children:n.children.map(f)};return n;};setTree(f(tree));};
+      const conv=(id,op)=>{const f=n=>{if(n.id===id){const lf=mkNode('leaf',[],n.text);lf.evidence_source=n.evidence_source||'';return{...n,type:op,text:'',children:[lf],evidence_source:''};}if(n.children)return{...n,children:n.children.map(f)};return n;};setTree(f(tree));};
+      return(<div className="space-y-3">
+        <div className="flex gap-2">
+          <input type="text" value={newText} onChange={e=>setNewText(e.target.value)} placeholder="Paste atomic requirement..." className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" onKeyPress={e=>e.key==='Enter'&&addLeaf()}/>
+          <button onClick={addLeaf} disabled={!newText.trim()} className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-200 disabled:cursor-not-allowed"><PlusI s={16}/></button>
+        </div>
+        <div className="flex flex-wrap gap-1.5 items-center">
+          <span className="text-xs text-gray-400">Wrap:</span>
+          {ops.map(op=><button key={op} onClick={()=>wrap(op)} className="px-2.5 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded font-mono">{op}</button>)}
+        </div>
+        <div className="border border-gray-200 rounded-lg p-3 min-h-[300px] max-h-[450px] overflow-y-auto bg-gray-50">
+          {!tree?<div className="text-center py-8 text-gray-400"><p className="text-sm mb-3">No tree.</p><button onClick={()=>setTree(mkNode('ALL',[]))} className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm">Init ALL</button></div>
+          :<TreeNode node={tree} depth={0} upd={upd} del={del} addChild={addChild} mkNode={mkNode} conv={conv}/>}
+        </div>
+      </div>);
+    }
+
+    /* ── TREE NODE ── */
+    function TreeNode({node,depth,upd,del,addChild,mkNode,conv}){
+      const [exp,setExp]=useState(true);const [edit,setEdit]=useState(false);const [editTxt,setEditTxt]=useState(node.text);const [addC,setAddC]=useState(false);const [newCTxt,setNewCTxt]=useState('');const [newCOp,setNewCOp]=useState('leaf');const [showConv,setShowConv]=useState(false);
+      const isOp=['ALL','ANY','NOT','IF','UNLESS'].includes(node.type);
+      const ops=['ALL','ANY','NOT','IF','UNLESS'];
+      const oc={ALL:'bg-green-100 text-green-800 border-green-300',ANY:'bg-yellow-100 text-yellow-800 border-yellow-300',NOT:'bg-red-100 text-red-800 border-red-300',IF:'bg-blue-100 text-blue-800 border-blue-300',UNLESS:'bg-purple-100 text-purple-800 border-purple-300',leaf:'bg-white border-gray-300'};
+      const save=()=>{upd(node.id,{text:editTxt});setEdit(false);};
+      const ac=()=>{if(newCOp==='leaf'&&!newCTxt.trim())return;addChild(node.id,mkNode(newCOp,[],newCOp==='leaf'?newCTxt:''));setNewCTxt('');setAddC(false);};
+      return(<div className={`${depth>0?'ml-5 border-l-2 border-gray-200 pl-3':''}`}>
+        <div className={`flex items-start gap-1.5 p-2 rounded-lg border ${oc[node.type]} mb-1.5`}>
+          {isOp&&node.children?.length>0&&<button onClick={()=>setExp(!exp)} className="mt-0.5 p-0.5 hover:bg-black/10 rounded shrink-0">{exp?<ChevronD s={14}/>:<ChevronR s={14}/>}</button>}
+          <div className="flex-1 min-w-0">
+            {isOp?(<div className="flex items-center gap-2"><select value={node.type} onChange={e=>upd(node.id,{type:e.target.value})} className="font-mono font-bold text-sm bg-transparent border-none focus:ring-0">{ops.map(op=><option key={op} value={op}>{op}</option>)}</select><span className="text-xs text-gray-400">({node.children?.length||0})</span></div>)
+            :edit?(<div className="flex gap-2"><input value={editTxt} onChange={e=>setEditTxt(e.target.value)} className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded" onKeyPress={e=>e.key==='Enter'&&save()} autoFocus/><button onClick={save} className="text-xs text-blue-600">Save</button></div>)
+            :<p className="text-sm cursor-pointer hover:bg-black/5 rounded px-1 py-0.5 break-words" onClick={()=>setEdit(true)}>{node.text||<em className="text-gray-400 text-xs">Click to edit</em>}</p>}
+            {!isOp&&(
+              <div className="flex gap-2 mt-1.5 items-center flex-wrap">
+                <select value={node.evidence_source||''} onChange={e=>upd(node.id,{evidence_source:e.target.value})} className="text-xs px-2 py-0.5 border border-gray-200 rounded bg-white">
+                  <option value="">Evidence...</option>{EVIDENCE_SOURCES.map(s=><option key={s} value={s}>{s}</option>)}
+                </select>
+                <div className="relative">
+                  <button onClick={()=>setShowConv(!showConv)} className="text-xs px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded">&#8627; Expand</button>
+                  {showConv&&<div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded shadow-lg z-10">{ops.map(op=><button key={op} onClick={()=>{conv(node.id,op);setShowConv(false);}} className={`block w-full text-left px-3 py-1 text-xs hover:bg-gray-100 ${oc[op].split(' ')[0]}`}>{op}</button>)}</div>}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex gap-0.5 shrink-0">
+            {isOp&&<button onClick={()=>setAddC(!addC)} className="p-1 hover:bg-black/10 rounded text-gray-500"><PlusI s={13}/></button>}
+            <button onClick={()=>del(node.id)} className="p-1 hover:bg-black/10 rounded text-red-500"><TrashI s={13}/></button>
+          </div>
+        </div>
+        {addC&&<div className="ml-5 mb-2 p-2 bg-gray-100 rounded flex gap-2 items-center">
+          <select value={newCOp} onChange={e=>setNewCOp(e.target.value)} className="text-xs px-2 py-1 border border-gray-300 rounded"><option value="leaf">Leaf</option>{ops.map(op=><option key={op} value={op}>{op}</option>)}</select>
+          {newCOp==='leaf'&&<input value={newCTxt} onChange={e=>setNewCTxt(e.target.value)} placeholder="Requirement..." className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded" onKeyPress={e=>e.key==='Enter'&&ac()}/>}
+          <button onClick={ac} className="px-2 py-1 text-xs bg-blue-600 text-white rounded">Add</button>
+          <button onClick={()=>setAddC(false)} className="text-xs text-gray-500 px-1">×</button>
+        </div>}
+        {exp&&node.children?.map(c=><TreeNode key={c.id} node={c} depth={depth+1} upd={upd} del={del} addChild={addChild} mkNode={mkNode} conv={conv}/>)}
+      </div>);
+    }
+
+    /* ── LOB SELECTOR ── */
+    function LOBSel({sel,all,toggle,addNew}){
+      const [show,setShow]=useState(false);const [val,setVal]=useState('');
+      const add=()=>{if(val.trim()){addNew(val.trim());toggle(val.trim());setVal('');setShow(false);}};
+      return(<div className="space-y-1">
+        <div className="flex flex-wrap gap-1.5">
+          {all.map(l=><label key={l} className="flex items-center gap-1 text-xs bg-gray-50 px-2 py-0.5 rounded border border-gray-200 cursor-pointer"><input type="checkbox" checked={sel.includes(l)} onChange={()=>toggle(l)} className="w-3 h-3"/>{l}</label>)}
+          {!show&&<button onClick={()=>setShow(true)} className="text-xs text-blue-600 px-1">+ Add</button>}
+        </div>
+        {show&&<div className="flex gap-1"><input value={val} onChange={e=>setVal(e.target.value)} placeholder="LOB..." className="flex-1 px-2 py-1 text-xs border border-blue-300 rounded" onKeyPress={e=>e.key==='Enter'&&add()} autoFocus/><button onClick={add} className="px-2 py-1 text-xs bg-blue-600 text-white rounded">Add</button><button onClick={()=>setShow(false)} className="text-xs px-1 text-gray-500">×</button></div>}
+      </div>);
+    }
+
+    /* ── STAGE 3 ── */
+    function Stage3({sections,trees,cpts,setCpts,allLOBs,addLOB}){
+      const [cpt,setCpt]=useState('');const [maps,setMaps]=useState({general:[],supplementary:[],exception:[]});const [entries,setEntries]=useState([]);
+      const tc={general:'bg-blue-100 text-blue-800 border-blue-200',supplementary:'bg-purple-100 text-purple-800 border-purple-200',exception:'bg-orange-100 text-orange-800 border-orange-200'};
+      const addEntry=()=>setEntries([...entries,{id:`e_${Date.now()}`,table_heading:'',coverage_status:'covered_if_criteria_met',lob_applicability:[],dependent_codes:'',condition_notes:''}]);
+      const updEntry=(id,f,v)=>setEntries(entries.map(e=>e.id===id?{...e,[f]:v}:e));
+      const togLOB=(id,l)=>setEntries(entries.map(e=>e.id!==id?e:{...e,lob_applicability:e.lob_applicability.includes(l)?e.lob_applicability.filter(x=>x!==l):[...e.lob_applicability,l]}));
+      const dropSec=(e,t)=>{e.preventDefault();const sid=e.dataTransfer.getData('sectionId');if(!sid||maps[t].includes(sid))return;setMaps({...maps,[t]:[...maps[t],sid]});};
+      const remMap=(t,sid)=>setMaps({...maps,[t]:maps[t].filter(id=>id!==sid)});
+      const save=()=>{if(!cpt.trim())return;const m={cpt_code:cpt,general:maps.general,supplementary:maps.supplementary,exception:maps.exception,code_table_entries:entries.map(e=>({table_heading:e.table_heading,coverage_status:e.coverage_status,lob_applicability:e.lob_applicability,dependent_codes:e.dependent_codes.split(',').map(c=>c.trim()).filter(c=>c),condition_notes:e.condition_notes})),created_at:new Date().toISOString()};const idx=cpts.findIndex(x=>x.cpt_code===cpt);if(idx>=0){const u=[...cpts];u[idx]=m;setCpts(u);}else setCpts([...cpts,m]);setCpt('');setMaps({general:[],supplementary:[],exception:[]});setEntries([]);};
+      const load=m=>{setCpt(m.cpt_code);setMaps({general:m.general||[],supplementary:m.supplementary||[],exception:m.exception||[]});setEntries((m.code_table_entries||[]).map((e,i)=>({id:`e_${Date.now()}_${i}`,table_heading:e.table_heading||'',coverage_status:e.coverage_status||'covered_if_criteria_met',lob_applicability:e.lob_applicability||[],dependent_codes:(e.dependent_codes||[]).join(', '),condition_notes:e.condition_notes||''})));};
+      const getSec=id=>sections.find(s=>s.id===id);
+      return(<div>
+        <InstrPanel title="Stage 3: CPT Code Mapping">
+          <ol className="list-decimal list-inside space-y-1 ml-2"><li>Enter CPT/HCPCS code</li><li>Add Code Table Entries per table header</li><li>Drag sections into drop zones</li><li>Save mapping</li></ol>
+        </InstrPanel>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-4">
+            <h2 className="text-base font-semibold text-gray-900 mb-3">Saved ({cpts.length})</h2>
+            <div className="space-y-2 max-h-[700px] overflow-y-auto">
+              {cpts.length===0?<p className="text-xs text-gray-400 text-center py-4">None</p>:cpts.map(m=>(
+                <div key={m.cpt_code} className="p-2 bg-gray-50 rounded border border-gray-200 group">
+                  <div className="flex items-center justify-between"><button onClick={()=>load(m)} className="font-mono text-sm text-blue-600 hover:underline">{m.cpt_code}</button><button onClick={()=>setCpts(cpts.filter(x=>x.cpt_code!==m.cpt_code))} className="opacity-0 group-hover:opacity-100 text-red-400"><TrashI s={12}/></button></div>
+                  <div className="text-xs text-gray-400">{m.general.length}g {m.supplementary.length}s {m.exception.length}e</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="lg:col-span-3 bg-white rounded-xl border border-gray-200 p-4">
+            <h2 className="text-base font-semibold text-gray-900 mb-3">Available Sections</h2>
+            <div className="space-y-2 max-h-[650px] overflow-y-auto">
+              {sections.map(s=>(
+                <div key={s.id} draggable onDragStart={e=>e.dataTransfer.setData('sectionId',s.id)} className={`p-2.5 rounded-lg border-2 cursor-grab ${tc[s.type]} hover:shadow-sm`}>
+                  <div className="flex items-center gap-2"><GripI s={13} c="text-gray-400 shrink-0"/>
+                    <div className="flex-1 min-w-0"><div className="flex items-center gap-1.5 mb-0.5"><span className="font-mono text-xs font-bold bg-white/50 px-1.5 py-0.5 rounded">{s.id}</span><span className="text-xs uppercase font-medium">{s.type}</span></div><p className="text-xs line-clamp-2">{s.text}</p></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="lg:col-span-7 bg-white rounded-xl border border-gray-200 p-4 max-h-[800px] overflow-y-auto">
+            <h2 className="text-base font-semibold text-gray-900 mb-4">CPT Mapping</h2>
+            <div className="mb-4"><label className="block text-sm font-medium text-gray-700 mb-1.5">CPT/HCPCS Code</label><input value={cpt} onChange={e=>setCpt(e.target.value.toUpperCase())} placeholder="e.g., 27447" className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-blue-500"/></div>
+            <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-semibold text-amber-900">Code Table Entries ({entries.length})</h3><button onClick={addEntry} className="flex items-center gap-1 px-3 py-1 bg-amber-200 text-amber-900 rounded text-xs"><PlusI s={13}/> Add</button></div>
+              {entries.length===0?<p className="text-xs text-amber-700 text-center py-3">Click Add Entry.</p>:(
+                <div className="space-y-3">{entries.map((e,i)=>(
+                  <div key={e.id} className="p-3 bg-white rounded border border-amber-200">
+                    <div className="flex justify-between mb-2"><span className="text-xs font-semibold text-amber-800">Entry {i+1}</span><button onClick={()=>setEntries(entries.filter(x=>x.id!==e.id))} className="text-red-400"><TrashI s={13}/></button></div>
+                    <div className="space-y-2">
+                      <div><label className="block text-xs font-medium text-gray-600 mb-1">Table Heading</label><input value={e.table_heading} onChange={x=>updEntry(e.id,'table_heading',x.target.value)} className="w-full px-2 py-1 text-xs border border-gray-300 rounded"/></div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div><label className="block text-xs font-medium text-gray-600 mb-1">Coverage</label><select value={e.coverage_status} onChange={x=>updEntry(e.id,'coverage_status',x.target.value)} className="w-full px-2 py-1 text-xs border border-gray-300 rounded"><option value="covered_if_criteria_met">Covered if criteria met</option><option value="not_covered">Not covered</option><option value="experimental">Experimental</option><option value="other_related">Other</option></select></div>
+                        <div><label className="block text-xs font-medium text-gray-600 mb-1">LOB</label><LOBSel sel={e.lob_applicability} all={allLOBs} toggle={l=>togLOB(e.id,l)} addNew={addLOB}/></div>
+                      </div>
+                      <div><label className="block text-xs font-medium text-gray-600 mb-1">Dependent Codes</label><input value={e.dependent_codes} onChange={x=>updEntry(e.id,'dependent_codes',x.target.value)} className="w-full px-2 py-1 text-xs border border-gray-300 rounded font-mono"/></div>
+                      <div><label className="block text-xs font-medium text-gray-600 mb-1">Notes</label><textarea value={e.condition_notes} onChange={x=>updEntry(e.id,'condition_notes',x.target.value)} rows={2} className="w-full px-2 py-1 text-xs border border-gray-300 rounded resize-none"/></div>
+                    </div>
+                  </div>
+                ))}</div>
+              )}
+            </div>
+            <div className="space-y-3">
+              {['general','supplementary','exception'].map(t=>(
+                <div key={t}><label className="block text-sm font-medium text-gray-700 mb-1.5 capitalize">{t}</label>
+                  <div onDragOver={e=>e.preventDefault()} onDrop={e=>dropSec(e,t)} className={`min-h-[48px] border-2 border-dashed rounded-lg p-2 ${tc[t]}`}>
+                    {maps[t].length>0?<div className="space-y-1">{maps[t].map(sid=>{const s=getSec(sid);return s?<div key={sid} className="flex items-center justify-between bg-white/70 p-1.5 rounded text-xs"><span className="font-mono font-bold mr-2">{sid}</span><span className="flex-1 truncate">{s.text}</span><button onClick={()=>remMap(t,sid)} className="text-red-500 ml-2"><TrashI s={11}/></button></div>:null;})}</div>
+                    :<p className="text-center text-gray-400 text-xs py-2">Drop {t} section here</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button onClick={save} disabled={!cpt.trim()} className={`w-full mt-4 py-2.5 rounded-lg text-sm font-medium ${cpt.trim()?'bg-blue-600 text-white hover:bg-blue-700':'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>Save CPT Mapping</button>
+          </div>
+        </div>
+      </div>);
+    }
+
+    const root=ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<AnnotationTool/>);
   </script>
 </body>
 </html>
