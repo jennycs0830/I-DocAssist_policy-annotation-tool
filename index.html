@@ -237,6 +237,7 @@ function ReportViewer({ reportData, onBack }) {
   const s3     = reportData.stage3  || {};
   const iaa    = reportData.inter_annotator_agreement || {};
   const errSum = reportData.error_summary || {};
+  const errLog = reportData.error_log || [];
   const perSec = s2.per_section || {};
 
   const secTextMap = useMemo(() => {
@@ -377,17 +378,186 @@ function ReportViewer({ reportData, onBack }) {
         )}
 
         {/* ── STAGE 3 ── */}
-        {activeTab === 's3' && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <MCard label="Code Precision"       value={s3.code_precision}/>
-              <MCard label="Code Recall"          value={s3.code_recall}/>
-              <MCard label="Code F1"              value={s3.code_f1}/>
-              <MCard label="Section Link Jaccard" value={s3.mean_section_link_jaccard}/>
+        {activeTab === 's3' && (() => {
+          /* New format: s3.per_code array with {code, result, pred_sections, ref_sections, is_addition} */
+          /* Fallback: error_log entries for older reports */
+          const perCode   = s3.per_code || [];
+          const usePerCode = perCode.length > 0;
+
+          const correct   = usePerCode
+            ? perCode.filter(e => e.result === 'correct')
+            : errLog.filter(e => e.stage === 'stage3' && e.error_type === 'correct_code');
+          const missed    = usePerCode
+            ? perCode.filter(e => e.result === 'missing_code' || e.result === 'missed_code')
+            : errLog.filter(e => e.stage === 'stage3' && (e.error_type === 'missing_code' || e.error_type === 'missed_code'));
+          const spurious  = usePerCode
+            ? perCode.filter(e => e.result === 'spurious_code')
+            : errLog.filter(e => e.stage === 'stage3' && e.error_type === 'spurious_code');
+          const wrongLink = usePerCode
+            ? perCode.filter(e => e.result === 'wrong_section_link')
+            : errLog.filter(e => e.stage === 'stage3' && e.error_type === 'wrong_section_link');
+
+          /* Resolve section IDs — prefer dedicated array fields, fallback to text parsing */
+          const getSecIds = (entry, field) => {
+            if (usePerCode) {
+              const arr = field === 'ref' ? entry.ref_sections : entry.pred_sections;
+              return Array.isArray(arr) ? arr : [];
+            }
+            const dedicated = field === 'ref' ? entry.ref_sections : entry.pred_sections;
+            if (Array.isArray(dedicated) && dedicated.length > 0) return dedicated;
+            const txt = field === 'ref' ? (entry.ref_text || '') : (entry.pred_text || '');
+            const matches = txt.match(/sec\d+/g);
+            return matches ? [...new Set(matches)] : [];
+          };
+
+          /* Get CPT code string from entry */
+          const getCode = (entry) => {
+            if (usePerCode) return String(entry.code || '');
+            return ((entry.pred_text || entry.ref_text || entry.cpt_code || '')).replace(/^\+\s*/, '');
+          };
+
+          /* Get add-on flag */
+          const isAddon = (entry) => usePerCode ? !!entry.is_addition : !!(entry.is_addon);
+
+          /* Resolve section text from secTextMap — full content, no truncation */
+          const getSecText = (secId) => {
+            if (!secId) return null;
+            const entry = secTextMap[secId];
+            return entry ? (entry.ref || entry.pred || null) : null;
+          };
+
+          const SecBlock = ({ secId, borderColor, textColor }) => {
+            const txt = getSecText(secId);
+            return (
+              <div className={`pl-2 border-l-2 ${borderColor} mb-3`}>
+                <span className={`font-mono text-xs font-bold ${textColor}`}>{secId}</span>
+                {txt
+                  ? <div className="text-gray-700 text-xs mt-1 leading-relaxed" style={{whiteSpace:'pre-wrap'}}>{txt}</div>
+                  : <div className="text-gray-400 text-xs italic mt-0.5">Section content not available</div>
+                }
+              </div>
+            );
+          };
+
+          const CodeCard = ({ entry, chipColor, borderColor, textColor, secField }) => {
+            const code   = getCode(entry);
+            const secIds = getSecIds(entry, secField);
+            return (
+              <div className={`rounded-lg border ${borderColor} bg-white p-3 space-y-2`}>
+                <div className="flex items-center gap-2">
+                  <span className={`font-mono text-sm font-bold px-2 py-0.5 rounded ${chipColor}`}>{code}</span>
+                  {isAddon(entry) && <span className="text-xs bg-orange-100 text-orange-700 font-bold px-1.5 py-0.5 rounded">Add-on</span>}
+                </div>
+                {secIds.length > 0
+                  ? secIds.map((sid, i) => <SecBlock key={i} secId={sid} borderColor={borderColor} textColor={textColor}/>)
+                  : <div className="text-xs text-gray-400 italic">No section links</div>
+                }
+              </div>
+            );
+          };
+
+          return (
+            <div className="space-y-5">
+              {/* Metric cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <MCard label="Code Precision"       value={s3.code_precision}/>
+                <MCard label="Code Recall"          value={s3.code_recall}/>
+                <MCard label="Code F1"              value={s3.code_f1}/>
+                <MCard label="Section Link Jaccard" value={s3.mean_section_link_jaccard}/>
+                <MCard label="Add-on Accuracy"      value={s3.is_addition_accuracy}/>
+              </div>
+
+              <div className="text-sm font-semibold text-gray-700">CPT Code Breakdown</div>
+
+              {/* ── CORRECT CODES ── */}
+              <div className={`rounded-lg border p-4 ${correct.length > 0 ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-sm font-semibold text-green-800">✓ Correct Codes</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${correct.length > 0 ? 'bg-green-200 text-green-900' : 'bg-gray-200 text-gray-600'}`}>{correct.length}</span>
+                  <span className="text-xs text-gray-500">— code and section links match reference</span>
+                </div>
+                {correct.length > 0
+                  ? <div className="space-y-2">{correct.map((e,i) => <CodeCard key={i} entry={e} secField="pred"
+                      chipColor="bg-green-100 text-green-800 border border-green-300"
+                      borderColor="border-green-200" textColor="text-green-800"/>)}</div>
+                  : <div className="text-xs text-gray-400 italic">No correct codes</div>
+                }
+              </div>
+
+              {/* ── MISSED CODES ── */}
+              <div className={`rounded-lg border p-4 ${missed.length > 0 ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'}`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-sm font-semibold text-red-800">✗ Missed Codes</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${missed.length > 0 ? 'bg-red-200 text-red-900' : 'bg-gray-200 text-gray-600'}`}>{missed.length}</span>
+                  <span className="text-xs text-gray-500">— in reference but not predicted</span>
+                </div>
+                {missed.length > 0
+                  ? <div className="space-y-2">{missed.map((e,i) => <CodeCard key={i} entry={e} secField="ref"
+                      chipColor="bg-red-100 text-red-800 border border-red-300"
+                      borderColor="border-red-200" textColor="text-red-800"/>)}</div>
+                  : <div className="text-xs text-gray-400 italic">No missed codes</div>
+                }
+              </div>
+
+              {/* ── EXTRA CODES (spurious) ── */}
+              <div className={`rounded-lg border p-4 ${spurious.length > 0 ? 'border-orange-200 bg-orange-50' : 'border-gray-200 bg-gray-50'}`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-sm font-semibold text-orange-800">+ Extra Codes</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${spurious.length > 0 ? 'bg-orange-200 text-orange-900' : 'bg-gray-200 text-gray-600'}`}>{spurious.length}</span>
+                  <span className="text-xs text-gray-500">— predicted but not in reference</span>
+                </div>
+                {spurious.length > 0
+                  ? <div className="space-y-2">{spurious.map((e,i) => <CodeCard key={i} entry={e} secField="pred"
+                      chipColor="bg-orange-100 text-orange-800 border border-orange-300"
+                      borderColor="border-orange-200" textColor="text-orange-800"/>)}</div>
+                  : <div className="text-xs text-gray-400 italic">No extra codes</div>
+                }
+              </div>
+
+              {/* ── WRONG SECTION LINKS ── */}
+              <div className={`rounded-lg border p-4 ${wrongLink.length > 0 ? 'border-yellow-200 bg-yellow-50' : 'border-gray-200 bg-gray-50'}`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-sm font-semibold text-yellow-800">⚠ Wrong Section Links</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${wrongLink.length > 0 ? 'bg-yellow-200 text-yellow-900' : 'bg-gray-200 text-gray-600'}`}>{wrongLink.length}</span>
+                  <span className="text-xs text-gray-500">— code matched but linked sections differ</span>
+                </div>
+                {wrongLink.length > 0
+                  ? <div className="space-y-4">
+                      {wrongLink.map((e, i) => {
+                        const code       = getCode(e);
+                        const refSecIds  = getSecIds(e, 'ref');
+                        const predSecIds = getSecIds(e, 'pred');
+                        return (
+                          <div key={i} className="rounded-lg border border-yellow-200 bg-white p-3 space-y-3">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-sm font-bold px-2 py-0.5 rounded bg-yellow-100 text-yellow-900 border border-yellow-300">{code}</span>
+                              {isAddon(e) && <span className="text-xs bg-orange-100 text-orange-700 font-bold px-1.5 py-0.5 rounded">Add-on</span>}
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="rounded border border-blue-200 bg-blue-50 p-3">
+                                <div className="text-xs font-bold text-blue-700 mb-2">Reference Sections ({refSecIds.length})</div>
+                                {refSecIds.length > 0
+                                  ? refSecIds.map((sid,j) => <SecBlock key={j} secId={sid} borderColor="border-blue-300" textColor="text-blue-800"/>)
+                                  : <div className="text-xs text-gray-400 italic">None</div>}
+                              </div>
+                              <div className="rounded border border-purple-200 bg-purple-50 p-3">
+                                <div className="text-xs font-bold text-purple-700 mb-2">Predicted Sections ({predSecIds.length})</div>
+                                {predSecIds.length > 0
+                                  ? predSecIds.map((sid,j) => <SecBlock key={j} secId={sid} borderColor="border-purple-300" textColor="text-purple-800"/>)
+                                  : <div className="text-xs text-gray-400 italic">None</div>}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  : <div className="text-xs text-gray-400 italic">No wrong section links</div>
+                }
+              </div>
+
             </div>
-            {s3.code_f1 === 0 && <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-sm text-red-800">Stage 3 metrics are all 0 — CPT code mapping may not have been evaluated or the annotator did not complete Stage 3.</div>}
-          </div>
-        )}
+          );
+        })()}
 
         {/* ── INTER-ANNOTATOR ── */}
         {activeTab === 'iaa' && (
