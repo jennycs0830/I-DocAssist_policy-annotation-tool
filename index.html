@@ -1343,6 +1343,8 @@ function AnnotationTool() {
   const [documentTitle,     setDocumentTitle]      = useState('');
   const [sections,          setSections]           = useState([]);
   const [sectionTrees,      setSectionTrees]       = useState({});
+  const [sectionIndications,setSectionIndications] = useState({});
+  const [sectionRefs,       setSectionRefs]        = useState({});
   const [cptMappings,       setCptMappings]        = useState([]);
   const [annotatorNotes,    setAnnotatorNotes]     = useState('');
   const [appFeedback,       setAppFeedback]        = useState('');
@@ -1358,20 +1360,33 @@ function AnnotationTool() {
 
   const canProceed = () => {
     if (currentStage === 1) return sections.length > 0 && documentTitle.trim() !== '';
-    if (currentStage === 2) return Object.keys(sectionTrees).length > 0;
+    if (currentStage === 2) return sections.some(s =>
+      (sectionIndications[s.id] || '').trim() &&
+      (sectionTrees[s.id] || sectionRefs[s.id])
+    );
     return true;
   };
 
   const exportData = () => {
-    const sectionsExport   = sections.map(s => ({ id:s.id, text:s.text }));
-    const logicTreesExport = {};
-    Object.keys(sectionTrees).forEach(sid => { const t = sectionTrees[sid]; if (t) logicTreesExport[sid] = convertTreeToExportFormat(t); });
+    const sectionsExport = sections.map(s => ({ id:s.id, text:s.text }));
+    const sectionAnnotationsExport = {};
+    sections.forEach(s => {
+      const indication = (sectionIndications[s.id] || '').trim();
+      if (!indication) return;
+      const ref  = sectionRefs[s.id];
+      const tree = sectionTrees[s.id];
+      if (ref) {
+        sectionAnnotationsExport[s.id] = { indication, output_type:'reference', reference_document:ref };
+      } else if (tree) {
+        sectionAnnotationsExport[s.id] = { indication, output_type:'inline', logic_tree:convertTreeToExportFormat(tree) };
+      }
+    });
     const cptMappingsExport = {};
     cptMappings.forEach(m => { cptMappingsExport[m.cpt_code] = { sections:m.sections||[], is_addon:m.is_addon||false }; });
     const ts = new Date().toISOString();
     const fp = documentTitle.replace(/\s+/g,'_') || 'annotation';
     const dl = (d, n) => { const b = new Blob([JSON.stringify(d,null,2)],{type:'application/json'}); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href=u; a.download=n; a.click(); URL.revokeObjectURL(u); };
-    dl({ document_title:documentTitle, sections:sectionsExport, logic_trees:logicTreesExport, cpt_mappings:cptMappingsExport, exported_at:ts }, `${fp}_annotation.json`);
+    dl({ document_title:documentTitle, sections:sectionsExport, section_annotations:sectionAnnotationsExport, cpt_mappings:cptMappingsExport, exported_at:ts }, `${fp}_annotation.json`);
     if (annotatorNotes.trim() || appFeedback.trim())
       setTimeout(() => dl({ document_title:documentTitle, annotator_notes:annotatorNotes, app_feedback:appFeedback, exported_at:ts }, `${fp}_feedback.json`), 500);
   };
@@ -1391,7 +1406,22 @@ function AnnotationTool() {
         const d = JSON.parse(ev.target.result);
         if (d.document_title) setDocumentTitle(d.document_title);
         if (d.sections) setSections((Array.isArray(d.sections) ? d.sections : []).map(s => ({ id:s.id, text:s.text, created_at:new Date().toISOString() })));
-        if (d.logic_trees) { const t={}; Object.keys(d.logic_trees).forEach(sid=>{t[sid]=convertImportedTree(d.logic_trees[sid]);}); setSectionTrees(t); }
+        if (d.section_annotations) {
+          const trees={}, refs={}, indications={};
+          Object.entries(d.section_annotations).forEach(([sid, ann]) => {
+            if (ann.indication) indications[sid] = ann.indication;
+            if (ann.output_type === 'inline' && ann.logic_tree)
+              trees[sid] = convertImportedTree(ann.logic_tree);
+            else if (ann.output_type === 'reference' && ann.reference_document)
+              refs[sid] = ann.reference_document;
+          });
+          setSectionTrees(trees); setSectionRefs(refs); setSectionIndications(indications);
+        } else if (d.logic_trees) {
+          // backward compat: old format without indication/output_type
+          const t={};
+          Object.keys(d.logic_trees).forEach(sid=>{t[sid]=convertImportedTree(d.logic_trees[sid]);});
+          setSectionTrees(t);
+        }
         if (d.cpt_mappings) { const m=[]; Object.keys(d.cpt_mappings).forEach(c=>{const mp=d.cpt_mappings[c];m.push({cpt_code:c,sections:mp.sections||[],is_addon:mp.is_addon||false,created_at:new Date().toISOString()});}); setCptMappings(m); }
         if (d.annotator_notes) setAnnotatorNotes(d.annotator_notes);
         if (d.app_feedback)    setAppFeedback(d.app_feedback);
@@ -1495,7 +1525,7 @@ function AnnotationTool() {
       {/* STAGE CONTENT */}
       <main className="max-w-7xl mx-auto px-6 pb-24">
         {currentStage === 1 && <Stage1SectionExtraction sections={sections} setSections={setSections}/>}
-        {currentStage === 2 && <Stage2AtomicBreakdown   sections={sections} sectionTrees={sectionTrees} setSectionTrees={setSectionTrees}/>}
+        {currentStage === 2 && <Stage2AtomicBreakdown   sections={sections} sectionTrees={sectionTrees} setSectionTrees={setSectionTrees} sectionIndications={sectionIndications} setSectionIndications={setSectionIndications} sectionRefs={sectionRefs} setSectionRefs={setSectionRefs}/>}
         {currentStage === 3 && <Stage3CPTMapping        sections={sections} sectionTrees={sectionTrees} cptMappings={cptMappings} setCptMappings={setCptMappings}/>}
       </main>
 
@@ -1508,7 +1538,7 @@ function AnnotationTool() {
           </button>
           <div className="text-sm text-gray-500 flex items-center gap-3">
             <span>{sections.length} section(s)</span><span>•</span>
-            <span>{Object.keys(sectionTrees).length} tree(s)</span><span>•</span>
+            <span>{sections.filter(s => (sectionIndications[s.id]||'').trim() && (sectionTrees[s.id] || sectionRefs[s.id])).length} annotated</span><span>•</span>
             <span>{cptMappings.length} CPT mapping(s)</span>
           </div>
           <button onClick={() => setCurrentStage(Math.min(3, currentStage + 1))} disabled={currentStage === 3 || !canProceed()}
@@ -1593,98 +1623,146 @@ function Stage1SectionExtraction({ sections, setSections }) {
 }
 
 /* ── STAGE 2 ── */
-function Stage2AtomicBreakdown({ sections, sectionTrees, setSectionTrees }) {
-  const [selectedSectionId, setSelectedSectionId] = useState(sections.length > 0 ? sections[0].id : null);
-  const currentSection = sections.find(s => s.id === selectedSectionId);
-  const currentTree    = sectionTrees[selectedSectionId] || null;
-  const updateTree     = t => setSectionTrees({ ...sectionTrees, [selectedSectionId]:t });
+/* ── ROUTING OR TREE PANEL ── */
+function RoutingOrTreePanel({ sectionId, sectionTrees, setSectionTrees, sectionRefs, setSectionRefs }) {
+  const tree      = sectionTrees[sectionId] || null;
+  const ref       = sectionRefs[sectionId]  || '';
+  const isRef     = !!ref && !tree;
+  const [mode, setMode] = useState(isRef ? 'reference' : 'inline');
+
+  const setModeAndClear = m => {
+    setMode(m);
+    if (m === 'reference') setSectionTrees({ ...sectionTrees, [sectionId]: null });
+    else setSectionRefs({ ...sectionRefs, [sectionId]: '' });
+  };
 
   return (
     <div>
-      <InstructionsPanel title="Stage 2 Instructions: Break Section Requirements into Atomic Items">
-        <div className="space-y-3">
-          <p><strong>Goal:</strong> Convert each section's requirements into a structured logic tree with atomic (individual, checkable) items.</p>
+      {/* Toggle */}
+      <div className="flex gap-2 mb-4">
+        <button onClick={() => setModeAndClear('inline')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${mode === 'inline' ? 'bg-green-100 border-green-400 text-green-800' : 'bg-gray-100 border-gray-200 text-gray-500 hover:bg-gray-200'}`}>
+          <GitBranch size={14}/> Inline criteria
+        </button>
+        <button onClick={() => setModeAndClear('reference')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${mode === 'reference' ? 'bg-purple-100 border-purple-400 text-purple-800' : 'bg-gray-100 border-gray-200 text-gray-500 hover:bg-gray-200'}`}>
+          <LinkIcon size={14}/> Refers to external doc
+        </button>
+      </div>
 
-          {/* Schema overview */}
+      {mode === 'inline' ? (
+        <TreeBuilder tree={tree} setTree={t => setSectionTrees({ ...sectionTrees, [sectionId]: t })}/>
+      ) : (
+        <div className="space-y-3">
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-xs text-purple-800">
+            <strong>Use this when</strong> the section contains no extractable inline criteria and instead explicitly names an external standard or policy document that governs coverage (e.g., an NCD, LCD, InterQual guideline, or another CPB/policy document by name). Do <strong>not</strong> use this just because a section is difficult — if criteria text exists, use "Inline criteria" instead.
+          </div>
+          <label className="block text-sm font-medium text-gray-700">External document name / identifier</label>
+          <input type="text" value={ref} onChange={e => setSectionRefs({ ...sectionRefs, [sectionId]: e.target.value })}
+            placeholder="e.g., NCD 160.13, LCD L38072, InterQual 2024, Aetna CPB 0006, BCBS IL SUR712"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm"/>
+          <p className="text-xs text-gray-500">Copy the document name exactly as it appears in the policy text.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Stage2AtomicBreakdown({ sections, sectionTrees, setSectionTrees, sectionIndications, setSectionIndications, sectionRefs, setSectionRefs }) {
+  const [selectedSectionId, setSelectedSectionId] = useState(sections.length > 0 ? sections[0].id : null);
+  const currentSection   = sections.find(s => s.id === selectedSectionId);
+  const currentIndication = selectedSectionId ? (sectionIndications[selectedSectionId] || '') : '';
+
+  const sectionDone = sid =>
+    (sectionIndications[sid] || '').trim() && (sectionTrees[sid] || (sectionRefs[sid] || '').trim());
+
+  return (
+    <div>
+      <InstructionsPanel title="Stage 2 Instructions: Annotate Each Section">
+        <div className="space-y-3">
+          <p><strong>Goal:</strong> For each section, write a short indication and then either build a logic tree of its inline criteria OR record the external document it defers to.</p>
+
           <div className="rounded-lg border border-blue-200 overflow-hidden text-xs">
-            <div className="bg-blue-100 px-3 py-1.5 font-semibold text-blue-900">Requirement Schema (4 levels)</div>
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-blue-50 border-b border-blue-100">
-                  <th className="px-3 py-1.5 text-left font-semibold text-blue-800 w-10">Level</th>
-                  <th className="px-3 py-1.5 text-left font-semibold text-blue-800 w-28">Name</th>
-                  <th className="px-3 py-1.5 text-left font-semibold text-blue-800">Description</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-blue-50">
-                <tr className="bg-white">
-                  <td className="px-3 py-1.5 font-mono font-bold text-blue-700">L1</td>
-                  <td className="px-3 py-1.5 font-medium">CPT Root</td>
-                  <td className="px-3 py-1.5 text-blue-800">The top-level policy identifier. Each CPT code maps to a set of coverage requirement sections.</td>
-                </tr>
-                <tr className="bg-blue-50/40">
-                  <td className="px-3 py-1.5 font-mono font-bold text-blue-700">L2</td>
-                  <td className="px-3 py-1.5 font-medium">Section</td>
-                  <td className="px-3 py-1.5 text-blue-800">A coherent block of policy requirements. Each CPT code maps to one or more sections, each represented as a logic tree.</td>
-                </tr>
-                <tr className="bg-white">
-                  <td className="px-3 py-1.5 font-mono font-bold text-blue-700">L3</td>
-                  <td className="px-3 py-1.5 font-medium">↳ Logic Gate</td>
-                  <td className="px-3 py-1.5 text-blue-800">An operator node (<span className="font-mono font-bold bg-green-100 text-green-800 px-1 rounded">ALL</span> or <span className="font-mono font-bold bg-yellow-100 text-yellow-800 px-1 rounded">ANY</span>) that defines how its children are evaluated.</td>
-                </tr>
-                <tr className="bg-blue-50/40">
-                  <td className="px-3 py-1.5 font-mono font-bold text-blue-700">L4</td>
-                  <td className="px-3 py-1.5 font-medium">↳ Leaf Node</td>
-                  <td className="px-3 py-1.5 text-blue-800">A terminal node containing one atomic requirement statement and the evidence document type(s) needed to verify it.</td>
-                </tr>
-              </tbody>
-            </table>
+            <div className="bg-blue-100 px-3 py-1.5 font-semibold text-blue-900">Per-section steps</div>
+            <div className="bg-white px-3 py-2 space-y-1">
+              <p><span className="font-semibold">1. Indication</span> — Write 1–2 sentences describing <em>when/to whom</em> this section applies (the patient category, procedure type, or clinical scenario). Do <strong>not</strong> copy the requirements themselves.</p>
+              <p><span className="font-semibold">2. Output type</span> — Choose <span className="font-mono font-bold text-green-700">Inline criteria</span> if the section contains extractable requirements, or <span className="font-mono font-bold text-purple-700">Refers to external doc</span> if the section explicitly names an outside standard with no inline criteria.</p>
+              <p><span className="font-semibold">3a. Inline</span> — Build the logic tree: paste each atomic requirement and choose ALL / ANY operators.</p>
+              <p><span className="font-semibold">3b. Reference</span> — Enter the external document name exactly as it appears in the text (e.g., NCD 160.13, InterQual 2024).</p>
+            </div>
           </div>
 
-          <ol className="list-decimal list-inside space-y-1 ml-2">
-            <li>Select a section from the left panel</li>
-            <li>Paste each atomic requirement into the tree builder and click "+"</li>
-            <li>Use operators to structure the logic (see below)</li>
-            <li>For each leaf, check all applicable <code className="bg-gray-200 px-1 rounded">evidence_sources</code></li>
-            <li>Repeat for all sections</li>
-          </ol>
           <div>
-            <p className="font-medium mb-1">Logic Operators:</p>
+            <p className="font-medium mb-1">Logic Operators (for inline sections):</p>
             <ul className="space-y-1 ml-2">
               <li><span className="inline-block px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs font-mono font-bold">ALL</span> — All children must be satisfied (AND)</li>
               <li><span className="inline-block px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded text-xs font-mono font-bold">ANY</span> — At least one child must be satisfied (OR)</li>
             </ul>
           </div>
-          <p className="text-orange-600 italic">⚠️ Do NOT create custom labels. If an evidence category doesn't fit, select "other" and describe the issue in Notes &amp; Feedback.</p>
+          <p className="text-orange-600 italic">⚠️ Do NOT use "Refers to external doc" because a section is complex or hard — only when no inline criteria exist and an external document is explicitly named.</p>
         </div>
       </InstructionsPanel>
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Section list */}
         <div className="lg:col-span-3 bg-white rounded-xl border border-gray-200 p-4">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Sections</h2>
-          <div className="space-y-2 max-h-[600px] overflow-y-auto">
+          <div className="space-y-2 max-h-[700px] overflow-y-auto">
             {sections.map(section => (
               <button key={section.id} onClick={() => setSelectedSectionId(section.id)}
                 className={`w-full text-left p-3 rounded-lg border-2 transition-all ${selectedSectionId === section.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-sm font-bold">{section.id}</span>
-                  {sectionTrees[section.id] && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">✓ Tree</span>}
+                  {sectionDone(section.id)
+                    ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">✓ Done</span>
+                    : (sectionRefs[section.id] || '').trim()
+                      ? <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">→ Ref</span>
+                      : sectionTrees[section.id]
+                        ? <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">Tree</span>
+                        : null}
                 </div>
               </button>
             ))}
           </div>
         </div>
+
+        {/* Section text */}
         <div className="lg:col-span-4 bg-white rounded-xl border border-gray-200 p-4">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Section Content</h2>
           {currentSection ? (
-            <div className="p-4 rounded-lg border border-gray-200 bg-gray-50 max-h-[600px] overflow-y-auto">
+            <div className="p-4 rounded-lg border border-gray-200 bg-gray-50 max-h-[700px] overflow-y-auto">
               <span className="font-mono text-xs font-bold bg-white px-2 py-0.5 rounded border border-gray-300 mb-2 inline-block">{currentSection.id}</span>
               <p className="text-sm whitespace-pre-wrap select-all mt-2">{currentSection.text}</p>
             </div>
           ) : <p className="text-gray-500 text-center py-8">Select a section</p>}
         </div>
+
+        {/* Annotation panel */}
         <div className="lg:col-span-5 bg-white rounded-xl border border-gray-200 p-4">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Logic Tree Builder</h2>
-          {selectedSectionId && <TreeBuilder tree={currentTree} setTree={updateTree}/>}
+          {selectedSectionId ? (
+            <div className="space-y-5">
+              {/* Indication */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-800 mb-1">
+                  Indication <span className="text-red-500">*</span>
+                  <span className="ml-1 font-normal text-gray-500 text-xs">(1–2 sentences: when/to whom this section applies)</span>
+                </label>
+                <textarea rows={3} value={currentIndication}
+                  onChange={e => setSectionIndications({ ...sectionIndications, [selectedSectionId]: e.target.value })}
+                  placeholder="e.g., Applies to adult patients (≥18) requesting anterior cervical discectomy and fusion (ACDF) who have failed conservative management."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm resize-none"/>
+              </div>
+
+              {/* Routing + tree/ref */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-800 mb-2">Output type <span className="text-red-500">*</span></label>
+                <RoutingOrTreePanel
+                  sectionId={selectedSectionId}
+                  sectionTrees={sectionTrees} setSectionTrees={setSectionTrees}
+                  sectionRefs={sectionRefs}   setSectionRefs={setSectionRefs}/>
+              </div>
+            </div>
+          ) : <p className="text-gray-500 text-center py-8">Select a section to annotate</p>}
         </div>
       </div>
     </div>
